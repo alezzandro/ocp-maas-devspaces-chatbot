@@ -1,0 +1,29 @@
+# Generated credentials
+setup/.generated-credentials.env
+private/
+
+# Python virtual environments
+.venv/
+venv/
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+
+# Downloaded tools
+ocp-gpu-provisioner-aws/
+
+# Downloaded documentation (large binary files)
+downloads/
+
+# Agent tools cache
+agent-tools/

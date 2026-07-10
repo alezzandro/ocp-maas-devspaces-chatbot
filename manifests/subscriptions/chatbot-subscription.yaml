@@ -1,0 +1,18 @@
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: chatbot-subscription
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: qwen3-8b
+      namespace: models-as-a-service
+      tokenRateLimits:
+        - limit: 100000
+          window: "1h"
+  owner:
+    groups:
+      - name: chatbot-users
+  priority: 5
+  tokenMetadata:
+    costCenter: "customer-support"

@@ -1,0 +1,23 @@
+{
+  "models": [
+    {
+      "title": "Qwen3-8B via MaaS",
+      "model": "qwen3-8b-fp8",
+      "apiBase": "https://maas.CLUSTER_DOMAIN_PLACEHOLDER/models-as-a-service/qwen3-8b-fp8/v1",
+      "provider": "openai",
+      "apiKey": "APIKEY_PLACEHOLDER"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Qwen3-8B via MaaS",
+    "model": "qwen3-8b-fp8",
+    "apiBase": "https://maas.CLUSTER_DOMAIN_PLACEHOLDER/models-as-a-service/qwen3-8b-fp8/v1",
+    "provider": "openai",
+    "apiKey": "APIKEY_PLACEHOLDER"
+  },
+  "tabAutocompleteOptions": {
+    "useCopyBuffer": false,
+    "maxPromptTokens": 2048,
+    "prefixPercentage": 0.5
+  }
+}

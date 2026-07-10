@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: model-registry-db
+  namespace: rhoai-model-registries
+  labels:
+    app: model-registry-db
+spec:
+  serviceName: model-registry-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-registry-db
+  template:
+    metadata:
+      labels:
+        app: model-registry-db
+    spec:
+      containers:
+        - name: mysql
+          image: registry.redhat.io/rhel9/mysql-80:latest
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_USER
+              value: mlmd
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: model-registry-db-credentials
+                  key: password
+            - name: MYSQL_DATABASE
+              value: model_registry
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: model-registry-db-credentials
+                  key: root-password
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql/data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-registry-db
+  namespace: rhoai-model-registries
+  labels:
+    app: model-registry-db
+spec:
+  selector:
+    app: model-registry-db
+  ports:
+    - port: 3306
+      targetPort: 3306
+  clusterIP: None

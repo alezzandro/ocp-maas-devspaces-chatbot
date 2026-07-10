@@ -1,0 +1,21 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "ansible.lightspeed.enabled": false,
+    "ansible.lightspeed.suggestions.enabled": false,
+    "yaml.schemas": {
+      "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/playbook": "*.yml"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "redhat.ansible",
+      "redhat.vscode-yaml",
+      "continue.continue"
+    ]
+  }
+}

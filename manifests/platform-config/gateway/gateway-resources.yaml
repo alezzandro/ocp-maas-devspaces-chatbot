@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: maas-gateway-options
+  namespace: openshift-ingress
+data:
+  resources: |
+    limits:
+      memory: 2Gi
+    requests:
+      memory: 512Mi

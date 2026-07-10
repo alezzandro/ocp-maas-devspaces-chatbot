@@ -1,0 +1,36 @@
+apiVersion: infrastructure.opendatahub.io/v1
+kind: HardwareProfile
+metadata:
+  name: gpu-l4-nvidia
+  namespace: redhat-ods-applications
+  labels:
+    opendatahub.io/dashboard: "true"
+  annotations:
+    opendatahub.io/dashboard-feature-visibility: '["model-serving"]'
+spec:
+  displayName: "NVIDIA L4 GPU"
+  description: "Single NVIDIA L4 GPU (24GB VRAM) for model serving"
+  enabled: true
+  identifiers:
+    - displayName: CPU
+      identifier: cpu
+      defaultCount: 2
+      maxCount: 8
+      minCount: 1
+    - displayName: Memory
+      identifier: memory
+      defaultCount: 8Gi
+      maxCount: 32Gi
+      minCount: 4Gi
+    - displayName: "NVIDIA GPU"
+      identifier: nvidia.com/gpu
+      defaultCount: 1
+      maxCount: 1
+      minCount: 1
+  nodeSelectors:
+    - key: node-role.kubernetes.io/worker-gpu
+      value: ""
+  tolerations:
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      operator: Exists

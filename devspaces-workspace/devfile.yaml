@@ -1,0 +1,34 @@
+schemaVersion: 2.3.0
+metadata:
+  generateName: ansible-ai-assistant-
+  description: "Ansible playbook development with AI coding assistance via MaaS"
+attributes:
+  controller.devfile.io/storage-type: per-user
+projects:
+  - name: ansible-playbooks
+    git:
+      remotes:
+        origin: 'https://github.com/alezzandro/ocp-maas-devspaces-chatbot'
+      checkoutFrom:
+        revision: main
+components:
+  - name: tools
+    container:
+      image: quay.io/devfile/universal-developer-image:ubi8-latest
+      memoryLimit: 4Gi
+      memoryRequest: 2Gi
+      cpuLimit: 4000m
+      cpuRequest: 1000m
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: ANSIBLE_FORCE_COLOR
+          value: "true"
+commands:
+  - id: copy-continue-config
+    exec:
+      component: tools
+      commandLine: "mkdir -p /home/user/.continue && cp /projects/ansible-playbooks/devspaces-workspace/continue-config.json /home/user/.continue/config.json && echo 'Continue config copied successfully'"
+events:
+  postStart:
+    - copy-continue-config

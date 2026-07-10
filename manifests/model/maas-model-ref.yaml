@@ -1,0 +1,10 @@
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSModelRef
+metadata:
+  name: qwen3-8b
+  namespace: models-as-a-service
+spec:
+  endpointOverride: http://qwen3-8b-fp8-kserve-workload-svc.llm.svc.cluster.local:8000
+  modelRef:
+    kind: LLMInferenceService
+    name: qwen3-8b-fp8

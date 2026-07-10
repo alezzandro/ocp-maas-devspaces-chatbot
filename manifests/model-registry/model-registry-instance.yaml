@@ -1,0 +1,19 @@
+apiVersion: modelregistry.opendatahub.io/v1beta1
+kind: ModelRegistry
+metadata:
+  name: default-registry
+  namespace: rhoai-model-registries
+  labels:
+    app: model-registry
+spec:
+  mysql:
+    host: model-registry-db.rhoai-model-registries.svc.cluster.local
+    port: 3306
+    database: model_registry
+    username: mlmd
+    passwordSecret:
+      name: model-registry-db-credentials
+      key: password
+  rest:
+    serviceRoute: enabled
+    port: 8080
