@@ -25,12 +25,13 @@ components:
         - name: ANSIBLE_FORCE_COLOR
           value: "true"
 commands:
-  - id: install-continue-extension
+  - id: setup-continue-config
     exec:
       component: tools
       commandLine: |
-        echo "Continue AI config auto-mounted at /home/user/.continue/config.json"
-        echo "Continue extension available via VS Code extensions marketplace"
+        mkdir -p /home/user/.continue
+        cp /etc/continue-config/config.json /home/user/.continue/config.json
+        echo "Continue AI config ready at /home/user/.continue/config.json"
 events:
   postStart:
-    - install-continue-extension
+    - setup-continue-config

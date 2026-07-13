@@ -50,7 +50,7 @@ metadata:
     controller.devfile.io/mount-to-devworkspace: "true"
     controller.devfile.io/watch-secret: "true"
   annotations:
-    controller.devfile.io/mount-path: "/home/user/.continue"
+    controller.devfile.io/mount-path: "/etc/continue-config"
     controller.devfile.io/mount-as: "subpath"
 type: Opaque
 stringData:
@@ -79,7 +79,7 @@ stringData:
       }
     }
 EOF
-echo "   Continue config Secret created (auto-mounted to /home/user/.continue/config.json)."
+echo "   Continue config Secret created (mounted to /etc/continue-config/config.json, copied at workspace start)."
 
 DEVSPACES_URL=$(oc get checluster devspaces -n openshift-devspaces \
   -o jsonpath='{.status.cheURL}' 2>/dev/null || echo "")
