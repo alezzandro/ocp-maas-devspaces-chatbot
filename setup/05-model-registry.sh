@@ -30,7 +30,22 @@ oc wait deployment model-catalog -n rhoai-model-registries \
   --for=condition=Available --timeout=120s 2>/dev/null || \
   echo "   Model Catalog deployment not yet available."
 
-echo "5. Creating Model Registry instance (REST API server)..."
+echo "5. Deploying MySQL backend for Model Registry..."
+if ! oc get secret model-registry-db-credentials -n rhoai-model-registries &>/dev/null; then
+  MR_DB_PASS=$(openssl rand -hex 16)
+  MR_ROOT_PASS=$(openssl rand -hex 16)
+  oc create secret generic model-registry-db-credentials \
+    -n rhoai-model-registries \
+    --from-literal=password="${MR_DB_PASS}" \
+    --from-literal=root-password="${MR_ROOT_PASS}"
+fi
+oc apply -f "${MANIFESTS_DIR}/model-registry/mysql/mysql.yaml"
+echo "   Waiting for MySQL to be ready..."
+oc wait statefulset model-registry-db -n rhoai-model-registries \
+  --for=jsonpath='{.status.readyReplicas}'=1 --timeout=120s 2>/dev/null || \
+  echo "   WARNING: MySQL not ready yet, continuing..."
+
+echo "6. Creating Model Registry instance (REST API server)..."
 oc apply -f "${MANIFESTS_DIR}/model-registry/model-registry-instance.yaml"
 
 echo "   Waiting for Model Registry server to be available..."
@@ -53,7 +68,7 @@ while true; do
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
-echo "6. Registering Qwen3-8B-FP8-dynamic model..."
+echo "7. Registering Qwen3-8B-FP8-dynamic model..."
 MR_SVC="http://default-registry.rhoai-model-registries.svc.cluster.local:8080/api/model_registry/v1alpha3"
 
 MODEL_EXISTS=$(oc exec deployment/default-registry -n rhoai-model-registries -- \

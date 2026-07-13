@@ -75,8 +75,8 @@ check "Model registered in registry" "$([ "$MODEL_COUNT" -ge 1 ] 2>/dev/null && 
 
 echo ""
 echo "5. Observability (Perses)..."
-PERSES_READY=$(oc get deployment perses -n redhat-ods-monitoring \
-  -o jsonpath='{.status.availableReplicas}' 2>/dev/null || echo "0")
+PERSES_READY=$(oc get pods -n redhat-ods-monitoring -l app.kubernetes.io/managed-by=perses-operator \
+  --no-headers 2>/dev/null | grep -c "Running" || echo "0")
 check "Perses server running" "$([ "$PERSES_READY" -ge 1 ] 2>/dev/null && echo true || echo false)"
 
 DASHBOARDS=$(oc get persesdashboard -A -o jsonpath='{.items[*].status.conditions[0].status}' 2>/dev/null | tr ' ' '\n' | grep -c "True" || echo "0")
