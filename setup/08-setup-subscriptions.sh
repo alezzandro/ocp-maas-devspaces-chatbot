@@ -73,6 +73,41 @@ else
   echo "   WARNING: Could not generate Chatbot API key."
 fi
 
+echo "8. Enabling MaaS telemetry for Usage Dashboard..."
+oc patch tenants.maas.opendatahub.io default-tenant -n models-as-a-service \
+  --type merge \
+  -p '{
+    "spec": {
+      "telemetry": {
+        "enabled": true,
+        "metrics": {
+          "captureOrganization": false,
+          "captureUser": true,
+          "captureGroup": false,
+          "captureModelUsage": true
+        }
+      }
+    }
+  }'
+echo "   Tenant telemetry enabled (creates TelemetryPolicy for metric labels)."
+
+echo "   Waiting for TelemetryPolicy to be created..."
+TIMEOUT=60
+INTERVAL=5
+ELAPSED=0
+while true; do
+  if oc get telemetrypolicy maas-telemetry -n openshift-ingress &>/dev/null; then
+    echo "   TelemetryPolicy is available."
+    break
+  fi
+  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+    echo "   WARNING: TelemetryPolicy not found after ${TIMEOUT}s."
+    break
+  fi
+  sleep "$INTERVAL"
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
 echo ""
-echo "Phase 8 complete: Two independent subscriptions with API keys configured."
+echo "Phase 8 complete: Two independent subscriptions with API keys and telemetry configured."
 echo "========================================="

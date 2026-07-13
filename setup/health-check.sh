@@ -92,6 +92,13 @@ if [[ "$PERSES_PODS" -ge 1 ]]; then
 else
   check_warn "Perses: not running"
 fi
+
+TP_EXISTS=$(oc get telemetrypolicy maas-telemetry -n openshift-ingress -o jsonpath='{.status.conditions[?(@.type=="Enforced")].status}' 2>/dev/null || echo "Unknown")
+if [[ "$TP_EXISTS" == "True" ]]; then
+  check_pass "TelemetryPolicy: Enforced (Usage Dashboard labels)"
+else
+  check_warn "TelemetryPolicy: $TP_EXISTS (Usage Dashboard may not show subscription data)"
+fi
 echo ""
 
 # ─── 6. Open WebUI ──────────────────────────────────────────────────────────────
