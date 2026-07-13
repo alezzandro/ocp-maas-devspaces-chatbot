@@ -25,10 +25,12 @@ components:
         - name: ANSIBLE_FORCE_COLOR
           value: "true"
 commands:
-  - id: copy-continue-config
+  - id: install-continue-extension
     exec:
       component: tools
-      commandLine: "mkdir -p /home/user/.continue && cp /projects/ansible-playbooks/devspaces-workspace/continue-config.json /home/user/.continue/config.json && echo 'Continue config copied successfully'"
+      commandLine: |
+        echo "Continue AI config auto-mounted at /home/user/.continue/config.json"
+        echo "Continue extension available via VS Code extensions marketplace"
 events:
   postStart:
-    - copy-continue-config
+    - install-continue-extension

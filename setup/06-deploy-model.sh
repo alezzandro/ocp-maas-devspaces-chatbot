@@ -86,7 +86,43 @@ else
 fi
 
 echo ""
+echo "7. Deploying Gen AI Playground (LlamaStackDistribution)..."
+oc apply -f "${MANIFESTS_DIR}/playground/llama-stack-config.yaml"
+oc apply -f "${MANIFESTS_DIR}/playground/llamastack-distribution.yaml"
+
+echo "   Waiting for Playground to be ready..."
+TIMEOUT=120
+INTERVAL=10
+ELAPSED=0
+while true; do
+  PHASE=$(oc get llamastackdistribution lsd-genai-playground -n models-as-a-service \
+    -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+  if [[ "$PHASE" == "Ready" ]]; then
+    echo "   Gen AI Playground is Ready!"
+    break
+  fi
+  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+    echo "   WARNING: Playground not ready after ${TIMEOUT}s (phase: ${PHASE})."
+    break
+  fi
+  echo "   Playground phase: ${PHASE} (${ELAPSED}s / ${TIMEOUT}s)"
+  sleep "$INTERVAL"
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+echo ""
+echo "8. Deploying OpenShift MCP Server..."
+oc apply -f "${MANIFESTS_DIR}/playground/openshift-mcp-server.yaml"
+echo "   Waiting for OpenShift MCP Server to be ready..."
+oc wait mcpserver openshift-mcp-server -n models-as-a-service \
+  --for=jsonpath='{.status.conditions[?(@.type=="Ready")].status}'=True --timeout=60s 2>/dev/null || \
+  echo "   WARNING: MCP Server not ready yet. Check prerequisites."
+echo "   OpenShift MCP Server: $(oc get mcpserver openshift-mcp-server -n models-as-a-service -o jsonpath='{.status.address.url}' 2>/dev/null)"
+
+echo ""
 echo "Phase 6 complete: Model deployed and exposed via MaaS."
 echo "   Model: Qwen3-8B-FP8-dynamic (vLLM CUDA)"
 echo "   MaaS Endpoint: https://maas.${CLUSTER_DOMAIN}/models-as-a-service/qwen3-8b-fp8/v1"
+echo "   Gen AI Playground: lsd-genai-playground (models-as-a-service namespace)"
+echo "   OpenShift MCP Server: openshift-mcp-server (models-as-a-service namespace)"
 echo "========================================="

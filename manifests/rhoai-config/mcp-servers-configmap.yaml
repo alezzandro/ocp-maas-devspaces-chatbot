@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gen-ai-aa-mcp-servers
+  namespace: redhat-ods-applications
+data:
+  OpenShift-MCP-Server: |
+    {
+      "url": "http://openshift-mcp-server.models-as-a-service.svc.cluster.local:8080/mcp",
+      "description": "Red Hat OpenShift MCP server for cluster management and troubleshooting. Provides read-only access to cluster resources, configurations, and status through AI-powered natural language interaction."
+    }
+  Fetch: |
+    {
+      "url": "https://remote.mcpservers.org/fetch",
+      "description": "Fetch web content and convert HTML to markdown for analysis and summarization."
+    }
+  Sequential-Thinking: |
+    {
+      "url": "https://remote.mcpservers.org/sequentialthinking",
+      "description": "Structured problem-solving through a dynamic, reflective thinking process."
+    }

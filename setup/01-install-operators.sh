@@ -47,7 +47,13 @@ oc wait csv -n openshift-operators -l operators.coreos.com/opentelemetry-product
 oc wait csv -n openshift-operators -l operators.coreos.com/tempo-product.openshift-operators="" \
   --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s 2>/dev/null || echo "   Waiting for Tempo..."
 
-echo "3. Creating GPU operand instances..."
+echo "3. Installing MCP lifecycle operator (Developer Preview, for MCP Catalog)..."
+oc apply -f https://github.com/kubernetes-sigs/mcp-lifecycle-operator/releases/latest/download/install.yaml 2>/dev/null || \
+  echo "   WARNING: MCP lifecycle operator install failed. MCP Catalog deploy will be unavailable."
+oc wait deployment mcp-lifecycle-operator-controller-manager \
+  -n mcp-lifecycle-operator-system --for=condition=Available --timeout=120s 2>/dev/null || true
+
+echo "4. Creating GPU operand instances..."
 oc apply -f "${MANIFESTS_DIR}/operators/gpu/nfd-instance.yaml"
 
 echo "   Waiting for NFD to be ready before creating ClusterPolicy..."
@@ -55,7 +61,7 @@ sleep 30
 
 oc apply -f "${MANIFESTS_DIR}/operators/gpu/cluster-policy.yaml"
 
-echo "4. Waiting for ClusterPolicy to reach ready state..."
+echo "5. Waiting for ClusterPolicy to reach ready state..."
 echo "   This takes 5-10 minutes as NVIDIA drivers are installed on GPU nodes..."
 oc wait clusterpolicy gpu-cluster-policy \
   --for=jsonpath='{.status.state}'=ready --timeout=600s 2>/dev/null || \

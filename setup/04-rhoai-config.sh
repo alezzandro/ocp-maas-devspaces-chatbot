@@ -17,7 +17,25 @@ oc apply -f "${MANIFESTS_DIR}/rhoai-config/datasciencecluster.yaml"
 echo "2. Applying DSCInitialization..."
 oc apply -f "${MANIFESTS_DIR}/rhoai-config/dscinitializaton.yaml"
 
-echo "3. Enabling Model Catalog and MaaS in dashboard..."
+echo "3. Waiting for OdhDashboardConfig to be created by the operator..."
+TIMEOUT=120
+INTERVAL=10
+ELAPSED=0
+while true; do
+  if oc get odhdashboardconfig odh-dashboard-config -n redhat-ods-applications &>/dev/null; then
+    echo "   OdhDashboardConfig is available."
+    break
+  fi
+  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+    echo "   WARNING: OdhDashboardConfig not found after ${TIMEOUT}s. Patch may fail."
+    break
+  fi
+  echo "   Waiting for OdhDashboardConfig... (${ELAPSED}s / ${TIMEOUT}s)"
+  sleep "$INTERVAL"
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+echo "4. Enabling RHOAI 3.4 dashboard features..."
 oc patch odhdashboardconfig odh-dashboard-config -n redhat-ods-applications \
   --type merge -p '{
     "spec": {
@@ -26,15 +44,30 @@ oc patch odhdashboardconfig odh-dashboard-config -n redhat-ods-applications \
         "modelAsService": true,
         "genAiStudio": true,
         "maasAuthPolicies": true,
-        "observabilityDashboard": true
+        "observabilityDashboard": true,
+        "vLLMDeploymentOnMaaS": true,
+        "llmGatewayField": true,
+        "promptManagement": true,
+        "mcpCatalog": true,
+        "aiAssetCustomEndpoints": true
+      },
+      "genAiStudioConfig": {
+        "aiAssetCustomEndpoints": {
+          "externalProviders": false,
+          "clusterDomains": []
+        }
       }
     }
-  }' 2>/dev/null || echo "   Dashboard config not yet available, will be patched on next reconcile."
+  }'
+echo "   Dashboard features enabled: Gen AI Studio, Observability, MaaS, Prompt Management, MCP Catalog."
 
-echo "4. Creating HardwareProfile for L4 GPU..."
+echo "5. Creating MCP servers ConfigMap for Gen AI Playground..."
+oc apply -f "${MANIFESTS_DIR}/rhoai-config/mcp-servers-configmap.yaml"
+
+echo "6. Creating HardwareProfile for L4 GPU..."
 oc apply -f "${MANIFESTS_DIR}/rhoai-config/hardware-profile.yaml"
 
-echo "5. Waiting for ModelsAsServiceReady condition..."
+echo "7. Waiting for ModelsAsServiceReady condition..."
 TIMEOUT=300
 INTERVAL=15
 ELAPSED=0

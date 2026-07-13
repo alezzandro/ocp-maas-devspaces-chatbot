@@ -34,24 +34,62 @@ while true; do
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
-echo "3. Configuring Continue extension with live MaaS credentials..."
+echo "3. Creating Continue AI extension config (auto-mounted into workspaces)..."
 DEVSPACES_KEY=$(oc get secret devspaces-maas-apikey -n openshift-devspaces \
   -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d || echo "PLACEHOLDER_KEY")
 
-CONTINUE_CONFIG="${REPO_ROOT}/devspaces-workspace/continue-config.json"
-sed -i "s|CLUSTER_DOMAIN_PLACEHOLDER|${CLUSTER_DOMAIN}|g" "$CONTINUE_CONFIG"
-sed -i "s|DEVSPACES_API_KEY_PLACEHOLDER|${DEVSPACES_KEY}|g" "$CONTINUE_CONFIG"
-echo "   Updated continue-config.json with live credentials."
+cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: continue-ai-config
+  namespace: openshift-devspaces
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-config
+    controller.devfile.io/mount-to-devworkspace: "true"
+    controller.devfile.io/watch-secret: "true"
+  annotations:
+    controller.devfile.io/mount-path: "/home/user/.continue"
+    controller.devfile.io/mount-as: "subpath"
+type: Opaque
+stringData:
+  config.json: |
+    {
+      "models": [
+        {
+          "title": "Qwen3-8B via MaaS",
+          "model": "qwen3-8b-fp8",
+          "apiBase": "https://maas.${CLUSTER_DOMAIN}/models-as-a-service/qwen3-8b-fp8/v1",
+          "provider": "openai",
+          "apiKey": "${DEVSPACES_KEY}"
+        }
+      ],
+      "tabAutocompleteModel": {
+        "title": "Qwen3-8B via MaaS",
+        "model": "qwen3-8b-fp8",
+        "apiBase": "https://maas.${CLUSTER_DOMAIN}/models-as-a-service/qwen3-8b-fp8/v1",
+        "provider": "openai",
+        "apiKey": "${DEVSPACES_KEY}"
+      },
+      "tabAutocompleteOptions": {
+        "useCopyBuffer": false,
+        "maxPromptTokens": 2048,
+        "prefixPercentage": 0.5
+      }
+    }
+EOF
+echo "   Continue config Secret created (auto-mounted to /home/user/.continue/config.json)."
 
 DEVSPACES_URL=$(oc get checluster devspaces -n openshift-devspaces \
   -o jsonpath='{.status.cheURL}' 2>/dev/null || echo "")
 
 echo ""
-echo "   MaaS endpoint: ${MAAS_URL}/models-as-a-service/qwen3-8b-fp8/v1"
+echo "   MaaS endpoint: https://maas.${CLUSTER_DOMAIN}/models-as-a-service/qwen3-8b-fp8/v1"
 echo "   Dev Spaces URL: ${DEVSPACES_URL}"
 echo ""
-echo "   IMPORTANT: Commit and push continue-config.json so the workspace gets"
-echo "   the correct credentials when it clones the repo."
+echo "   The Continue extension config is auto-mounted into all workspaces."
+echo "   No git commit needed -- credentials are injected dynamically."
 echo ""
 echo "   To create a workspace, navigate to:"
 echo "   ${DEVSPACES_URL}/#https://github.com/alezzandro/ocp-maas-devspaces-chatbot?devfilePath=devspaces-workspace/devfile.yaml"

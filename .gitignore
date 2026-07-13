@@ -8,7 +8,8 @@ venv/
 __pycache__/
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .idea/
 
 # OS
