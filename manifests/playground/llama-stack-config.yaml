@@ -29,7 +29,7 @@ data:
         config:
           api_token: ${env.VLLM_API_TOKEN_1:=fake}
           base_url: https://qwen3-8b-fp8-kserve-workload-svc.models-as-a-service.svc.cluster.local:8000/v1
-          max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
+          max_tokens: ${env.VLLM_MAX_TOKENS:=2048}
           tls_verify: ${env.VLLM_TLS_VERIFY:=true}
       vector_io:
       - provider_id: milvus
