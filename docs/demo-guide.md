@@ -4,6 +4,16 @@
 
 This demo showcases Red Hat OpenShift AI 3.4 Models-as-a-Service (MaaS) as an enterprise AI governance platform. A single LLM (Qwen3-8B) is deployed from the Red Hat AI model catalog through the model registry, then exposed via MaaS with independent subscriptions for two consumers: developers using AI coding assistance in OpenShift Dev Spaces, and an operations team using a chatbot interface (Open WebUI). Each consumer has separate API keys with independent token tracking -- demonstrating enterprise-grade cost attribution and access governance.
 
+## Architecture Overview
+
+![Architecture Diagram](../images/Gemini_Generated_Architecture.png)
+
+## Demo Infographic
+
+Use this infographic as a leave-behind or pre-briefing asset for stakeholders:
+
+![Demo Infographic](../images/Gemini_Generated_Infographics.png)
+
 ## Customer Pain Points Addressed
 
 | Pain Point | How This Demo Addresses It |

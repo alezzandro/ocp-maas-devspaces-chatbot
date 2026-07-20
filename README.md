@@ -46,26 +46,11 @@ See [docs/prerequisites.md](docs/prerequisites.md) for full details.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    OpenShift 4.22 on AWS                      │
-│                                                              │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │ Model Lifecycle  │    │ MaaS Platform                   │ │
-│  │                 │    │                                 │ │
-│  │ Catalog ──────► │    │ Gateway + Kuadrant + Authorino  │ │
-│  │ Registry ─────► │    │ PostgreSQL (API keys)           │ │
-│  │ InferenceService│◄───│ Subscriptions + Rate Limiting   │ │
-│  │ (vLLM + L4 GPU) │    └─────────────────────────────────┘ │
-│  └─────────────────┘              ▲           ▲              │
-│                                   │           │              │
-│  ┌────────────────────┐  ┌───────────────────────┐          │
-│  │ Dev Spaces          │  │ Open WebUI             │          │
-│  │ Continue Extension  │  │ Chat Interface         │          │
-│  │ Key A (50k tok/min) │  │ Key B (50k tok/min)    │          │
-│  └────────────────────┘  └───────────────────────┘          │
-└──────────────────────────────────────────────────────────────┘
-```
+![Architecture Diagram](images/Gemini_Generated_Architecture.png)
+
+## Demo Overview
+
+![Demo Infographic](images/Gemini_Generated_Infographics.png)
 
 ## Setup Phases
 
