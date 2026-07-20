@@ -8,6 +8,28 @@ This demo showcases Red Hat OpenShift AI 3.4 Models-as-a-Service (MaaS) as an en
 
 ![Architecture Diagram](../images/Gemini_Generated_Architecture.png)
 
+The architecture follows a layered approach built entirely on **Red Hat OpenShift Container Platform**, with each layer providing a distinct capability:
+
+**Consumer Layer** -- Three independent interfaces access the same governed AI model. OpenShift Dev Spaces delivers a zero-setup cloud IDE with AI code completion for developers. Open WebUI provides a ChatGPT-like chatbot interface for operations teams. The Gen AI Studio Playground (with MCP integration to OpenShift) enables data scientists to experiment with prompts and cluster-aware tools. Each consumer authenticates with its own API key, tied to a separate subscription.
+
+**MaaS Governance Layer** -- All inference requests pass through a single Istio-based gateway where Kuadrant enforces policy at the request level. Authorino authenticates API keys and resolves subscription identity. Limitador enforces per-subscription token rate limits. A TelemetryPolicy injects labels (user, subscription, model, cost center) into every metric, enabling per-team usage tracking without custom instrumentation.
+
+**AI Platform Services Layer** -- Red Hat OpenShift AI 3.4 provides the full model lifecycle. The Model Catalog offers a curated library of Red Hat validated models with hardware-specific performance benchmarks. The Model Registry maintains version control, governance metadata, and audit trail. KServe with the vLLM inference server delivers GPU-optimized model serving with continuous batching and FP8 quantization.
+
+**OpenShift Platform Foundation** -- The entire stack runs on OpenShift 4.22, leveraging Operators for automated lifecycle management, Service Mesh for traffic routing and mTLS, RBAC and NetworkPolicy for zero-trust security, integrated Prometheus monitoring, and GPU scheduling via the NVIDIA GPU Operator.
+
+**Infrastructure Layer** -- For this demo, we deploy on AWS using a single g6.2xlarge instance with an NVIDIA L4 GPU (24GB VRAM). PostgreSQL backs the MaaS API key store, MySQL backs the Model Registry, and Keycloak provides user authentication.
+
+### Deployment Flexibility: Beyond the Cloud
+
+While this demo runs on **AWS public cloud** for accessibility and ease of provisioning, the architecture is specifically designed to be **infrastructure-agnostic**. The primary target for this solution is:
+
+- **On-premise data centers** -- Organizations in regulated industries (banking, healthcare, defense, government) that cannot send inference data to public cloud providers. OpenShift runs on bare-metal, VMware, or Red Hat OpenStack, with the same operator-driven deployment.
+- **Disconnected / air-gapped environments** -- Classified or high-security sites with no internet connectivity. All models are packaged as OCI container images (ModelCar format) that can be mirrored to an internal registry. No external API calls are required at runtime.
+- **Edge locations** -- Factory floors, retail stores, telecom central offices, or military forward operating bases. A compact OpenShift cluster (as small as 3 nodes + 1 GPU) can serve models locally with sub-millisecond network latency and full data sovereignty.
+
+The key architectural principle is **self-contained AI inference**: the model, the governance layer, the serving infrastructure, and the observability stack all live within a single OpenShift cluster boundary. No tokens, prompts, or responses ever leave the cluster perimeter -- regardless of whether that cluster sits in AWS, in a private data center rack, or in a disconnected edge site.
+
 ## Demo Infographic
 
 Use this infographic as a leave-behind or pre-briefing asset for stakeholders:
