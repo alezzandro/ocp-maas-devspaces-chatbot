@@ -49,7 +49,11 @@ while true; do
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
-echo "5. Setting up Observability stack for RHOAI dashboards..."
+echo "5. Creating NetworkPolicy for payload-processing pod..."
+oc apply -f "${MANIFESTS_DIR}/platform-config/gateway/payload-processing-netpol.yaml"
+echo "   payload-processing pod allowed to reach K8s API."
+
+echo "6. Setting up Observability stack for RHOAI dashboards..."
 echo "   Configuring DSCI monitoring with metrics storage..."
 oc patch dsci default-dsci --type merge -p '{
   "spec": {
@@ -122,7 +126,7 @@ spec:
   externalName: data-science-perses.redhat-ods-monitoring.svc.cluster.local
 SVCEOF
 
-echo "6. Fixing ServiceMonitor compatibility with user-workload monitoring..."
+echo "7. Fixing ServiceMonitor compatibility with user-workload monitoring..."
 oc label servicemonitor nfd-controller-manager-metrics-monitor -n openshift-nfd \
   openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
 oc label servicemonitor odh-model-controller-metrics-monitor -n redhat-ods-applications \
