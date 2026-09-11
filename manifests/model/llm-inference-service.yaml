@@ -9,8 +9,18 @@ metadata:
   annotations:
     opendatahub.io/hardware-profile-name: gpu-l4-nvidia
     opendatahub.io/hardware-profile-namespace: redhat-ods-applications
+    opendatahub.io/model-type: generative
+    opendatahub.io/connections: qwen3-8b-fp8-connection
+    openshift.io/display-name: qwen3-8b-fp8
+    # MaaS owns gateway AuthPolicy (API keys). Keep the Gateway annotated
+    # opendatahub.io/managed=false so odh-model-controller does not attach
+    # {gateway}-authn. enable-auth must be "true": "false" installs anonymous
+    # *-kserve-route-authn on the HTTPRoute, which wipes auth.identity so
+    # Limitador never increments and the Usage dashboard stays at 0.
     security.opendatahub.io/enable-auth: "true"
 spec:
+  # Phase 6 substitutes the live NVIDIA CUDA LLMInferenceServiceConfig name
+  # (versioned per OpenShift AI CSV). Do not hard-code a 3.4 preset.
   baseRefs:
     - name: v3-4-2-kserve-config-llm-template-nvidia-cuda
   model:

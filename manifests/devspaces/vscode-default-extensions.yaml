@@ -1,0 +1,17 @@
+# Mounted as env into every DevWorkspace in this namespace.
+# che-code installs these .vsix files at editor start (silent).
+# The vsix is downloaded onto persistUserHome by the devfile postStart.
+# https://eclipse.dev/che/docs/stable/administration-guide/default-extensions-for-microsoft-visual-studio-code/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vscode-default-extensions
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-config
+    controller.devfile.io/mount-to-devworkspace: "true"
+    controller.devfile.io/watch-configmap: "true"
+  annotations:
+    controller.devfile.io/mount-as: env
+data:
+  DEFAULT_EXTENSIONS: /home/user/.continue/Continue.continue.vsix

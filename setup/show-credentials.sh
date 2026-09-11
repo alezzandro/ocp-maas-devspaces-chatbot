@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/ensure-authenticated.sh"
 
+LLM_NAME="qwen3-8b-fp8"
+
 echo "========================================="
 echo "  Demo Credentials and URLs"
 echo "========================================="
@@ -14,7 +16,7 @@ echo "Console: https://console-openshift-console.${CLUSTER_DOMAIN}"
 echo "User: $(oc whoami)"
 
 echo ""
-echo "--- RHOAI Dashboard ---"
+echo "--- OpenShift AI Dashboard ---"
 RHOAI_URL=$(oc get route rhods-dashboard -n redhat-ods-applications -o jsonpath='{.spec.host}' 2>/dev/null || echo "N/A")
 echo "URL: https://${RHOAI_URL}"
 
@@ -22,18 +24,30 @@ echo ""
 echo "--- MaaS ---"
 echo "MaaS API: ${MAAS_URL}"
 echo "Health: ${MAAS_URL}/maas-api/health"
+echo "Model endpoint: ${MAAS_URL}/models-as-a-service/${LLM_NAME}/v1"
+echo "LLMInferenceService: ${LLM_NAME} (1 replica, Qwen3-8B-FP8-dynamic)"
 
 echo ""
 echo "--- Dev Spaces ---"
 DEVSPACES_URL=$(oc get checluster devspaces -n openshift-devspaces -o jsonpath='{.status.cheURL}' 2>/dev/null || echo "N/A")
 echo "Dashboard: ${DEVSPACES_URL}"
 echo "Workspace: ${DEVSPACES_URL}/#https://github.com/alezzandro/ocp-maas-devspaces-chatbot?devfilePath=devspaces-workspace/devfile.yaml"
+echo "After first workspace start, re-run setup/09-deploy-devspaces.sh so Continue ConfigMaps land in the user namespace."
 
 echo ""
 echo "--- Chatbot (Open WebUI) ---"
 CHATBOT_URL=$(oc get route open-webui -n open-webui -o jsonpath='{.spec.host}' 2>/dev/null || echo "N/A")
 echo "URL: https://${CHATBOT_URL}"
 echo "First login creates admin account."
+
+echo ""
+echo "--- Gen AI Playground (trusted in-cluster path, bypasses MaaS) ---"
+echo "OpenShift AI → Gen AI studio → Playground"
+echo "Project: models-as-a-service"
+echo "OGXServer: ogx-genai-playground (CPU; HTTPS ClusterIP to Qwen, bypasses MaaS)"
+echo "Prompt: Write a short Ansible task to install and start nginx on RHEL 9"
+echo "Optional MCP: How many pods are running in models-as-a-service?"
+echo "Playground tokens are not counted on Observability → Usage."
 
 echo ""
 echo "--- API Keys ---"

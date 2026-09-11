@@ -69,16 +69,21 @@ while true; do
 done
 
 echo "7. Registering Qwen3-8B-FP8-dynamic model..."
-MR_SVC="http://default-registry.rhoai-model-registries.svc.cluster.local:8080/api/model_registry/v1alpha3"
+# Call the REST API via 127.0.0.1 inside the registry pod. Curling the
+# ClusterIP Service from that same pod times out (CNI hairpin).
+mr_curl() {
+  oc exec deployment/default-registry -n rhoai-model-registries -c rest-container -- \
+    curl -sS -m 20 "$@"
+}
 
-MODEL_EXISTS=$(oc exec deployment/default-registry -n rhoai-model-registries -- \
-  curl -s "${MR_SVC}/registered_models?name=qwen3-8b-fp8-dynamic" 2>/dev/null | \
+MR_LOCAL="http://127.0.0.1:8080/api/model_registry/v1alpha3"
+
+MODEL_EXISTS=$(mr_curl "${MR_LOCAL}/registered_models?name=qwen3-8b-fp8-dynamic" 2>/dev/null | \
   python3 -c "import sys,json; print(json.load(sys.stdin).get('size',0))" 2>/dev/null || echo "0")
 
 if [[ "$MODEL_EXISTS" == "0" ]]; then
   echo "   Creating registered model..."
-  MODEL_ID=$(oc exec deployment/default-registry -n rhoai-model-registries -- \
-    curl -s -X POST "${MR_SVC}/registered_models" \
+  MODEL_ID=$(mr_curl -X POST "${MR_LOCAL}/registered_models" \
     -H "Content-Type: application/json" \
     -d '{
       "name": "qwen3-8b-fp8-dynamic",
@@ -93,8 +98,7 @@ if [[ "$MODEL_EXISTS" == "0" ]]; then
     }' 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
 
   echo "   Creating model version v1.5..."
-  VERSION_ID=$(oc exec deployment/default-registry -n rhoai-model-registries -- \
-    curl -s -X POST "${MR_SVC}/model_versions" \
+  VERSION_ID=$(mr_curl -X POST "${MR_LOCAL}/model_versions" \
     -H "Content-Type: application/json" \
     -d "{
       \"name\": \"v1.5\",
@@ -108,8 +112,7 @@ if [[ "$MODEL_EXISTS" == "0" ]]; then
     }" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
 
   echo "   Creating model artifact (OCI image reference)..."
-  oc exec deployment/default-registry -n rhoai-model-registries -- \
-    curl -s -X POST "${MR_SVC}/model_versions/${VERSION_ID}/artifacts" \
+  mr_curl -X POST "${MR_LOCAL}/model_versions/${VERSION_ID}/artifacts" \
     -H "Content-Type: application/json" \
     -d '{
       "name": "qwen3-8b-fp8-dynamic-oci",

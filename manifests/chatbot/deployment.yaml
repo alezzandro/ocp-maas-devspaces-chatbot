@@ -47,6 +47,20 @@ spec:
               value: "false"
             - name: ENABLE_OPENAI_API
               value: "true"
+            # Open WebUI 0.10+ defaults to Native/Agentic mode and injects builtin
+            # tools (grep_knowledge_files, query_knowledge_files, …). Qwen3-8B is
+            # not a reliable tool-caller on that path; force Legacy completions.
+            # https://docs.openwebui.com/features/extensibility/plugin/tools/
+            - name: DEFAULT_MODEL_PARAMS
+              value: '{"function_calling":"legacy"}'
+            - name: ENABLE_WEB_SEARCH
+              value: "false"
+            - name: ENABLE_IMAGE_GENERATION
+              value: "false"
+            - name: ENABLE_CODE_INTERPRETER
+              value: "false"
+            - name: ENABLE_CODE_EXECUTION
+              value: "false"
           volumeMounts:
             - name: open-webui-data
               mountPath: /app/backend/data

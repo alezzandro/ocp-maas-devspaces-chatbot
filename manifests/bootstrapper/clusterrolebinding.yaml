@@ -1,0 +1,17 @@
+# Demo-only: this ServiceAccount can install operators and provision GPU MachineSets.
+# Delete the binding after the booth if the cluster is long-lived.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rh-demo-bootstrapper-cluster-admin
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: demo-runner
+    namespace: rh-demo-bootstrapper

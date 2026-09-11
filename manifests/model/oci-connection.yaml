@@ -1,0 +1,19 @@
+# Dashboard "connection" for the ModelCar OCI URI.
+# Required so AI hub → Deployments → Edit can extract form data.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: qwen3-8b-fp8-connection
+  namespace: models-as-a-service
+  labels:
+    opendatahub.io/dashboard: "true"
+    opendatahub.io/managed: "true"
+  annotations:
+    opendatahub.io/connection-type-ref: oci-v1
+    openshift.io/display-name: registry.redhat.io (Qwen3-8B ModelCar)
+    openshift.io/description: OCI registry host for the Qwen3-8B FP8 ModelCar
+type: Opaque
+stringData:
+  ACCESS_TYPE: '["Pull"]'
+  OCI_HOST: registry.redhat.io
+  .dockerconfigjson: '{"auths":{"registry.redhat.io":{}}}'

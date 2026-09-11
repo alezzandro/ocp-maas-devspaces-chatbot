@@ -38,6 +38,12 @@ oc wait csv -n openshift-nfd -l operators.coreos.com/nfd.openshift-nfd="" \
 oc wait csv -n nvidia-gpu-operator -l operators.coreos.com/gpu-operator-certified.nvidia-gpu-operator="" \
   --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s 2>/dev/null || echo "   Waiting for NVIDIA GPU..."
 
+oc wait csv -n openshift-operators -l operators.coreos.com/devspaces.openshift-operators="" \
+  --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s 2>/dev/null || echo "   Waiting for Dev Spaces..."
+
+oc wait csv -n openshift-operators -l operators.coreos.com/web-terminal.openshift-operators="" \
+  --for=jsonpath='{.status.phase}'=Succeeded --timeout=300s 2>/dev/null || echo "   Waiting for Web Terminal..."
+
 oc wait csv -n openshift-operators -l operators.coreos.com/cluster-observability-operator.openshift-operators="" \
   --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s 2>/dev/null || echo "   Waiting for COO..."
 

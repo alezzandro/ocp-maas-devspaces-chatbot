@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-work
+  namespace: rh-demo-bootstrapper
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

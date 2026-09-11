@@ -1,0 +1,145 @@
+# Single-file kickoff for OpenShift console → Import YAML.
+# Replace DEMO_GIT_REPO_PLACEHOLDER (and optionally DEMO_ADMIN_USER / DEMO_GIT_REF).
+# Image: quay.io/aarrichi/rh-demo-bootstrapper:ubi9-1
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: web-terminal
+  namespace: openshift-operators
+  labels:
+    app.kubernetes.io/name: web-terminal
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  channel: fast
+  installPlanApproval: Automatic
+  name: web-terminal
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rh-demo-bootstrapper
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+  annotations:
+    openshift.io/display-name: Demo Bootstrapper
+    openshift.io/description: Long-running in-cluster runner that clones a demo git repo and executes setup/full-setup.sh
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: demo-runner
+  namespace: rh-demo-bootstrapper
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rh-demo-bootstrapper-cluster-admin
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: demo-runner
+    namespace: rh-demo-bootstrapper
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: demo-work
+  namespace: rh-demo-bootstrapper
+  labels:
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-bootstrapper
+  namespace: rh-demo-bootstrapper
+  labels:
+    app: demo-bootstrapper
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-bootstrapper
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: demo-bootstrapper
+        app.kubernetes.io/name: rh-demo-bootstrapper
+    spec:
+      serviceAccountName: demo-runner
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrapper
+          image: quay.io/aarrichi/rh-demo-bootstrapper:ubi9-1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: HOME
+              value: /work
+            - name: WORK_DIR
+              value: /work
+            - name: DEMO_GIT_REPO
+              value: "DEMO_GIT_REPO_PLACEHOLDER"
+            - name: DEMO_GIT_REF
+              value: "rhoai-3.5"
+            - name: DEMO_SETUP_SCRIPT
+              value: "setup/full-setup.sh"
+            - name: DEMO_SETUP_ARGS
+              value: ""
+            - name: DEMO_RETRY
+              value: "false"
+            - name: DEMO_ADMIN_USER
+              value: ""
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: demo-git-token
+                  key: GIT_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: work
+              mountPath: /work
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: work
+          persistentVolumeClaim:
+            claimName: demo-work

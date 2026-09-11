@@ -1,0 +1,17 @@
+# Same Subscription as manifests/operators/web-terminal/subscription.yaml.
+# Kept in this directory so `oc apply -k` is allowed (kustomize cannot
+# load files outside the overlay).
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: web-terminal
+  namespace: openshift-operators
+  labels:
+    app.kubernetes.io/name: web-terminal
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  channel: fast
+  installPlanApproval: Automatic
+  name: web-terminal
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace

@@ -30,8 +30,19 @@ commands:
       component: tools
       commandLine: |
         mkdir -p /home/user/.continue
-        cp /etc/continue-config/config.json /home/user/.continue/config.json
-        echo "Continue AI config ready at /home/user/.continue/config.json"
+        if [ -f /etc/continue-config/config.json ]; then
+          cp /etc/continue-config/config.json /home/user/.continue/config.json
+        fi
+        if [ -f /etc/continue-config/config.yaml ]; then
+          cp /etc/continue-config/config.yaml /home/user/.continue/config.yaml
+        fi
+        VSIX=/home/user/.continue/Continue.continue.vsix
+        if [ ! -s "$VSIX" ]; then
+          curl -fsSL --retry 3 -o "$VSIX" \
+            "https://open-vsx.org/api/Continue/continue/linux-x64/2.0.0/file/Continue.continue-2.0.0@linux-x64.vsix" \
+            || echo "WARNING: could not download Continue vsix (DEFAULT_EXTENSIONS install will skip until next start)"
+        fi
+        echo "Continue AI config ready at /home/user/.continue/"
 events:
   postStart:
     - setup-continue-config

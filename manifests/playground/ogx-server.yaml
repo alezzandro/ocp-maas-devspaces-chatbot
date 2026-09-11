@@ -1,0 +1,70 @@
+apiVersion: ogx.io/v1beta1
+kind: OGXServer
+metadata:
+  name: ogx-genai-playground
+  namespace: models-as-a-service
+  annotations:
+    openshift.io/display-name: Gen AI Playground
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  # OpenShift AI 3.5 renamed LlamaStackDistribution → OGXServer.
+  # https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ogx/llama-stack-to-ogx-migration_rag
+  distribution:
+    name: rh
+  # rh strips inline sentence-transformers/faiss; Playground CreateVectorStore
+  # needs granite-embedding-125m. overrideConfig skips OCI label fetch.
+  overrideConfig:
+    name: ogx-playground-config
+    key: config.yaml
+  network:
+    externalAccess:
+      enabled: false
+  workload:
+    replicas: 1
+    storage:
+      size: 20Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 500Mi
+      limits:
+        cpu: "2"
+        memory: 12Gi
+    overrides:
+      env:
+        # Direct ClusterIP to Qwen vLLM — Playground is a trusted in-cluster
+        # client and bypasses MaaS. Workload Service is appProtocol=https.
+        - name: VLLM_URL
+          value: https://qwen3-8b-fp8-kserve-workload-svc.models-as-a-service.svc.cluster.local:8000/v1
+        # Substituted by setup/06 from live vLLM /v1/models (do not assume CR name).
+        - name: INFERENCE_MODEL
+          value: INFERENCE_MODEL_PLACEHOLDER
+        - name: VLLM_TLS_VERIFY
+          value: "false"
+        - name: VLLM_MAX_TOKENS
+          value: "2048"
+        - name: VLLM_API_TOKEN
+          value: fake
+        # Baked in odh-ogx-core: models--ibm-granite--granite-embedding-125m-english
+        - name: HF_HOME
+          value: /opt/app-root/.cache/huggingface
+        - name: EMBEDDING_MODEL
+          value: ibm-granite/granite-embedding-125m-english
+        - name: EMBEDDING_PROVIDER
+          value: sentence-transformers
+        - name: EMBEDDING_PROVIDER_MODEL_ID
+          value: ibm-granite/granite-embedding-125m-english
+        - name: POSTGRES_HOST
+          value: ogx-postgres.models-as-a-service.svc.cluster.local
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: ogx
+        - name: POSTGRES_USER
+          value: ogx
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ogx-postgres-credentials
+              key: password

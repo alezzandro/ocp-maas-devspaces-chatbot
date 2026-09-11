@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-bootstrapper
+  namespace: rh-demo-bootstrapper
+  labels:
+    app: demo-bootstrapper
+    app.kubernetes.io/name: rh-demo-bootstrapper
+    app.kubernetes.io/part-of: ocp-maas-devspaces-chatbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-bootstrapper
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: demo-bootstrapper
+        app.kubernetes.io/name: rh-demo-bootstrapper
+    spec:
+      serviceAccountName: demo-runner
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bootstrapper
+          image: quay.io/aarrichi/rh-demo-bootstrapper:ubi9-1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: HOME
+              value: /work
+            - name: WORK_DIR
+              value: /work
+            - name: DEMO_GIT_REPO
+              value: "https://github.com/alezzandro/ocp-maas-devspaces-chatbot.git"
+            - name: DEMO_GIT_REF
+              value: "rhoai-3.5"
+            - name: DEMO_SETUP_SCRIPT
+              value: "setup/full-setup.sh"
+            - name: DEMO_SETUP_ARGS
+              value: ""
+            - name: DEMO_RETRY
+              value: "false"
+            - name: DEMO_ADMIN_USER
+              value: ""
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: demo-git-token
+                  key: GIT_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: work
+              mountPath: /work
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+      volumes:
+        - name: work
+          persistentVolumeClaim:
+            claimName: demo-work

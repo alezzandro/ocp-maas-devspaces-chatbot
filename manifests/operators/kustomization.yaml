@@ -9,6 +9,7 @@ resources:
   - gpu/nfd-subscription.yaml
   - gpu/nvidia-subscription.yaml
   - devspaces/subscription.yaml
+  - web-terminal/subscription.yaml
   - coo/subscription.yaml
   - opentelemetry/subscription.yaml
   - tempo/subscription.yaml

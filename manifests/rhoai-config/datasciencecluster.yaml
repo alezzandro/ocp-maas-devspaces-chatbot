@@ -10,18 +10,27 @@ spec:
       managementState: Managed
       modelsAsService:
         managementState: Managed
+    # OpenShift AI 3.5 control plane for Gen AI Studio / Playground.
+    # Ray / Kueue / Training stay Removed so they do not steal the GPU.
+    aipipelines:
+      managementState: Managed
+    ogx:
+      managementState: Managed
+    mlflowoperator:
+      managementState: Managed
+    trustyai:
+      managementState: Managed
     kueue:
       managementState: Removed
+    # Deprecated in 3.5 — Playground uses OGX.
     llamastackoperator:
-      managementState: Managed
+      managementState: Removed
     modelregistry:
       managementState: Managed
       registriesNamespace: rhoai-model-registries
     ray:
       managementState: Removed
     trainingoperator:
-      managementState: Removed
-    trustyai:
       managementState: Removed
     workbenches:
       managementState: Managed

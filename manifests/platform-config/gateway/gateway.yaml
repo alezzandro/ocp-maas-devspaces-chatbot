@@ -5,6 +5,11 @@ metadata:
   namespace: openshift-ingress
   annotations:
     security.opendatahub.io/authorino-tls-bootstrap: "true"
+    # Required on RHOAI 3.5: without this, odh-model-controller installs
+    # AuthPolicy {gateway}-authn on the same Gateway and Kuadrant overrides
+    # MaaS AuthPolicy maas-gateway-auth (API keys / X-MaaS-Username).
+    # https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/
+    opendatahub.io/managed: "false"
 spec:
   gatewayClassName: data-science-gateway-class
   listeners:

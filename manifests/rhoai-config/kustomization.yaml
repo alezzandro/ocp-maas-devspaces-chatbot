@@ -4,3 +4,4 @@ resources:
   - datasciencecluster.yaml
   - dscinitializaton.yaml
   - hardware-profile.yaml
+  - mcp-servers-configmap.yaml

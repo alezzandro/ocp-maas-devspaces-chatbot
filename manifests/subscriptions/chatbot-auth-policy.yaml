@@ -5,7 +5,7 @@ metadata:
   namespace: models-as-a-service
 spec:
   modelRefs:
-    - name: qwen3-8b
+    - name: qwen3-8b-fp8
       namespace: models-as-a-service
   subjects:
     groups:

@@ -6,7 +6,9 @@ if ! command -v oc &>/dev/null; then
 fi
 
 if ! oc whoami &>/dev/null; then
-  echo "ERROR: Not logged in to OpenShift. Run 'oc login' first."
+  echo "ERROR: Not authenticated to OpenShift."
+  echo "       Laptop: run 'oc login' first."
+  echo "       In-cluster: use manifests/bootstrapper (ServiceAccount demo-runner + cluster-admin)."
   exit 1
 fi
 

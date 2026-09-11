@@ -1,0 +1,33 @@
+# Applied by setup/09-deploy-devspaces.sh into every Dev Spaces *user* namespace
+# (label app.kubernetes.io/component=workspaces-namespace). che-code reads this
+# ConfigMap from the workspace namespace at editor start and auto-installs the
+# recommendations. A ConfigMap in openshift-devspaces is ignored.
+# https://docs.redhat.com/en/documentation/red_hat_openshift_dev_spaces/3.29/html/administration_guide/configuring-visual-studio-code
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vscode-editor-configurations
+  labels:
+    app.kubernetes.io/part-of: che.eclipse.org
+    app.kubernetes.io/component: workspaces-config
+data:
+  extensions.json: |
+    {
+      "recommendations": [
+        "Continue.continue",
+        "redhat.ansible",
+        "redhat.vscode-yaml"
+      ]
+    }
+  settings.json: |
+    {
+      "extensions.autoInstallRecommendations": true,
+      "ansible.lightspeed.enabled": false,
+      "ansible.lightspeed.suggestions.enabled": false
+    }
+  product.json: |
+    {
+      "trustedExtensionAuthAccess": [
+        "Continue.continue"
+      ]
+    }

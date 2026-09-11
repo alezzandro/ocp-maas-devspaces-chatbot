@@ -1,10 +1,13 @@
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
 metadata:
-  name: qwen3-8b
+  # Must match the LLMInferenceService name: MaaS takes model identity from
+  # the first two URL path segments (namespace/name). Clients call
+  # /models-as-a-service/qwen3-8b-fp8/... — a different MaaSModelRef name
+  # makes subscription select return 403 and Usage stays empty.
+  name: qwen3-8b-fp8
   namespace: models-as-a-service
 spec:
-  endpointOverride: http://qwen3-8b-fp8-kserve-workload-svc.llm.svc.cluster.local:8000
   modelRef:
     kind: LLMInferenceService
     name: qwen3-8b-fp8

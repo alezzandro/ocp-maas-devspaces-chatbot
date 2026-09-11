@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This demo showcases Red Hat OpenShift AI 3.4 Models-as-a-Service (MaaS) as an enterprise AI governance platform. A single LLM (Qwen3-8B) is deployed from the Red Hat AI model catalog through the model registry, then exposed via MaaS with independent subscriptions for two consumers: developers using AI coding assistance in OpenShift Dev Spaces, and an operations team using a chatbot interface (Open WebUI). Each consumer has separate API keys with independent token tracking -- demonstrating enterprise-grade cost attribution and access governance.
+This demo showcases Red Hat OpenShift AI 3.5 Models-as-a-Service (MaaS) as an enterprise AI governance platform. A single LLM (Qwen3-8B) is deployed from the Red Hat AI model catalog through the model registry, then exposed via MaaS with independent subscriptions for two consumers: developers using AI coding assistance in OpenShift Dev Spaces, and an operations team using a chatbot interface (Open WebUI). Each consumer has separate API keys with independent token tracking -- demonstrating enterprise-grade cost attribution and access governance.
 
 ## Architecture Overview
 
@@ -10,13 +10,13 @@ This demo showcases Red Hat OpenShift AI 3.4 Models-as-a-Service (MaaS) as an en
 
 The architecture follows a layered approach built entirely on **Red Hat OpenShift Container Platform**, with each layer providing a distinct capability:
 
-**Consumer Layer** -- Three independent interfaces access the same governed AI model. OpenShift Dev Spaces delivers a zero-setup cloud IDE with AI code completion for developers. Open WebUI provides a ChatGPT-like chatbot interface for operations teams. Both authenticate through the MaaS gateway with their own API keys, tied to separate subscriptions for independent token tracking. The Gen AI Studio Playground (with MCP integration to OpenShift) enables data scientists to experiment with prompts and cluster-aware tools -- it connects directly to the vLLM inference service via the internal cluster network, bypassing the MaaS gateway. This is intentional: it demonstrates that the underlying KServe model serving is always directly accessible for trusted platform-level workloads (like the built-in playground or internal pipelines), while the MaaS governance layer is enforced for external-facing or multi-tenant consumption paths. In production, organizations can choose which consumers are governed through MaaS subscriptions and which privileged workloads connect directly -- for example, batch scoring jobs, evaluation pipelines, or admin tooling that doesn't need per-user metering.
+**Consumer Layer** -- Three independent interfaces access the same governed AI model. OpenShift Dev Spaces delivers a zero-setup cloud IDE with AI code completion for developers. Open WebUI provides a ChatGPT-like chatbot interface for operations teams. Both authenticate through the MaaS gateway with their own API keys, tied to separate subscriptions for independent token tracking. The Gen AI Studio Playground (OGXServer on OpenShift AI 3.5, with MCP integration to OpenShift) enables data scientists to experiment with prompts and cluster-aware tools -- it connects directly to the vLLM inference service over HTTPS ClusterIP, bypassing the MaaS gateway. This is intentional: it demonstrates that the underlying KServe model serving is always directly accessible for trusted platform-level workloads (like the built-in playground or internal pipelines), while the MaaS governance layer is enforced for external-facing or multi-tenant consumption paths. Playground tokens are **not** counted on Observability → Usage. In production, organizations can choose which consumers are governed through MaaS subscriptions and which privileged workloads connect directly -- for example, batch scoring jobs, evaluation pipelines, or admin tooling that doesn't need per-user metering.
 
 **MaaS Governance Layer** -- All inference requests pass through a single Istio-based gateway where Kuadrant enforces policy at the request level. Authorino authenticates API keys and resolves subscription identity. Limitador enforces per-subscription token rate limits. A TelemetryPolicy injects labels (user, subscription, model, cost center) into every metric, enabling per-team usage tracking without custom instrumentation.
 
-**AI Platform Services Layer** -- Red Hat OpenShift AI 3.4 provides the full model lifecycle. The Model Catalog offers a curated library of Red Hat validated models with hardware-specific performance benchmarks. The Model Registry maintains version control, governance metadata, and audit trail. KServe with the vLLM inference server delivers GPU-optimized model serving with continuous batching and FP8 quantization.
+**AI Platform Services Layer** -- Red Hat OpenShift AI 3.5 provides the full model lifecycle. The Model Catalog offers a curated library of Red Hat validated models with hardware-specific performance benchmarks. The Model Registry maintains version control, governance metadata, and audit trail. KServe with the vLLM inference server delivers GPU-optimized model serving with continuous batching and FP8 quantization. Gen AI Studio uses OGX (not Llama Stack) with Granite embeddings so Playground vector-store creation works without a File Fetch popup.
 
-**OpenShift Platform Foundation** -- The entire stack runs on OpenShift 4.22, leveraging Operators for automated lifecycle management, Service Mesh for traffic routing and mTLS, RBAC and NetworkPolicy for zero-trust security, integrated Prometheus monitoring, and GPU scheduling via the NVIDIA GPU Operator.
+**OpenShift Platform Foundation** -- The entire stack runs on OpenShift 4.22, leveraging Operators for automated lifecycle management, Service Mesh for traffic routing and mTLS, RBAC and NetworkPolicy for zero-trust security, integrated Prometheus monitoring, and GPU scheduling via the NVIDIA GPU Operator. For laptop-free booth setup, an in-cluster **demo bootstrapper** (UBI9, Web Terminal Operator) clones this git repo and runs `setup/full-setup.sh` inside a keep-alive pod — see [bootstrapper.md](bootstrapper.md).
 
 **Infrastructure Layer** -- For this demo, we deploy on AWS using a single g6.2xlarge instance with an NVIDIA L4 GPU (24GB VRAM). PostgreSQL backs the MaaS API key store, MySQL backs the Model Registry, and Keycloak provides user authentication.
 
@@ -49,7 +49,7 @@ Use this infographic as a leave-behind or pre-briefing asset for stakeholders:
 
 ## Product Features Showcased
 
-| Demo Screen | RHOAI 3.4 Feature | Status | Customer Value |
+| Demo Screen | OpenShift AI 3.5 Feature | Status | Customer Value |
 |---|---|---|---|
 | Model Catalog | AI hub with performance benchmarks | GA | Informed model selection without trial-and-error |
 | Model Registry | Version control + governance metadata | GA | Audit trail, reproducibility, compliance |
@@ -68,12 +68,16 @@ Before starting the live demo:
 # Verify all components are healthy
 ./setup/health-check.sh
 
+# If setup ran in-cluster, also clear leftover DEMO_RETRY (does not re-run setup)
+./setup/health-check.sh --fix
+
 # Display URLs and credentials
 ./setup/show-credentials.sh
 ```
 
 **Verify:**
 - [ ] All health checks pass (GPU node, operators, MaaS, model, consumers)
+- [ ] If setup ran in-cluster, `health-check.sh --fix` has cleared leftover bootstrapper `DEMO_RETRY` (see [bootstrapper.md](bootstrapper.md))
 - [ ] RHOAI dashboard is accessible (login works)
 - [ ] Dev Spaces workspace loads within 2 minutes
 - [ ] Open WebUI is accessible (first login creates admin account)
@@ -139,11 +143,13 @@ Before starting the live demo:
 - Resource allocation visible: 1 GPU, 2 CPU, 8Gi memory
 - Replica count: 1 (min/max configurable for autoscaling)
 
-**Optional live interaction:** Navigate to **Gen AI Studio** -> **Playground**
-- Select the Qwen3-8B model
+**Optional live interaction:** Navigate to **Gen AI studio** -> **Playground**, project **models-as-a-service**
+- Select the Qwen3-8B model (OGXServer `ogx-genai-playground`)
+- The first open should **not** show a File Fetch / CreateVectorStore error (Granite embeddings are loaded)
 - Type: "Write a short Ansible task to install and start nginx on RHEL 9"
 - Show the streaming response
 - Point out response quality and speed
+- Optional MCP: "How many pods are running in models-as-a-service?"
 
 **Talking points:**
 
@@ -193,9 +199,9 @@ Before starting the live demo:
 
 **What to point out:**
 - VS Code running entirely in the browser -- zero local setup required
-- Continue extension active in the left sidebar (Continue icon)
+- Continue extension active in the left sidebar (Continue icon). If it is missing, restart the DevWorkspace after `setup/09-deploy-devspaces.sh` applied ConfigMaps in the **user** namespace.
 - The workspace has sample Ansible playbooks pre-loaded
-- Connected to Qwen3-8B via the MaaS endpoint (show Continue settings)
+- Connected to Qwen3-8B via `https://maas.<cluster>/models-as-a-service/qwen3-8b-fp8/v1` (show Continue settings)
 
 **Live demo steps:**
 1. Open `devspaces-workspace/sample-playbooks/webserver.yaml`
@@ -228,6 +234,7 @@ Before starting the live demo:
 - Clean, familiar chat interface (similar to ChatGPT)
 - Model selector showing Qwen3-8B (the MaaS-served model)
 - Conversation history and organization features
+- No floating `grep_knowledge_files` tool cards (Open WebUI is forced to `function_calling: legacy`)
 - No data leaves the cluster -- all processing is internal
 
 **Live demo steps:**
@@ -256,6 +263,9 @@ Before starting the live demo:
 **What to point out:**
 - Three Perses dashboards available: Cluster Admin, Model, MaaS Usage Admin
 - Select **MaaS Usage Admin** dashboard -- shows token consumption per subscription
+- After a Dev Spaces or Open WebUI chat, wait ~30s for scrape; filters should list `devspaces-subscription` / `chatbot-subscription`
+- If Usage stays at 0, the `MaaSModelRef` name must be `qwen3-8b-fp8` (same as the URL path) and `enable-auth` must stay `"true"` — see [docs/architecture.md](architecture.md)
+- Playground traffic does **not** appear here
 - Request counts and token consumption per consumer
 - Rate limit utilization and remaining quota
 - Switch to **Model** dashboard -- shows inference latency and throughput metrics
@@ -310,7 +320,7 @@ Before starting the live demo:
 
 ### "Is this supported in production?"
 
-> "Models-as-a-Service is GA (Generally Available) in OpenShift AI 3.4. The model catalog, registry, and KServe serving are all GA. Token consumption observability is Technology Preview. Full Red Hat support SLA applies."
+> "Models-as-a-Service is GA in OpenShift AI 3.5. The model catalog, registry, KServe serving, and Gen AI Playground (OGX) are documented for 3.5. Confirm the current support status of Usage/observability dashboards in the [3.5 MaaS guide](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/). Full Red Hat support SLA applies to GA components."
 
 ## Timing Guide
 
@@ -331,15 +341,26 @@ Before starting the live demo:
 - The live coding demo (screen 5) is the most impactful -- don't rush it
 - Have a fallback prompt ready if the model takes too long to respond
 
+## Overnight / in-cluster setup
+
+If the cluster was installed with the [in-cluster bootstrapper](bootstrapper.md), the `demo-bootstrapper` pod stays Running after success or failure. Attach from the console masthead **Web Terminal** (`oc rsh -n rh-demo-bootstrapper deploy/demo-bootstrapper`) or Pod Terminal. Status files live on the PVC: `/work/status`, `/work/setup.log`.
+
+After a cluster restart, run `bash setup/health-check.sh --fix`. That recovers GPU/serving, bounces MaaS gateway pods on HTTP 503 (Kuadrant WASM fail-closed), and **clears leftover bootstrapper `DEMO_RETRY` without re-running setup**. A `/work/status` file of `failed` after a completed install is advisory, not a demo outage.
+
+Do **not** scale `LLMInferenceService` `qwen3-8b-fp8` to 0 between visitors unless recovering the GPU driver.
+
 ## Appendix: Feature Reference
 
 | Feature | Official Documentation |
 |---|---|
-| Models-as-a-Service | [RHOAI 3.4 MaaS Guide](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html-single/govern_llm_access_with_models-as-a-service/index) |
-| Model Catalog | [Working with the Model Catalog](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html-single/working_with_the_model_catalog/index) |
-| Model Registry | [Managing Model Registries](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html-single/managing_model_registries/index) |
-| Model Serving | [Deploying Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html-single/deploying_models/index) |
+| Models-as-a-Service | [Govern LLM access with Models-as-a-Service (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/) |
+| Model Catalog | [Working with the Model Catalog (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_the_model_catalog/) |
+| Model Registry | [Managing model registries (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/managing_model_registries/) |
+| Model Serving | [Deploying models (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/deploying_models/) |
 | Red Hat AI Validated Models | [Validated Models Reference](https://docs.redhat.com/en/documentation/red_hat_ai/3/html-single/validated_models/index) |
-| Dev Spaces | [Dev Spaces 3.28 Installation](https://docs.redhat.com/en/documentation/red_hat_openshift_dev_spaces/3.28/html-single/installation_guide/index) |
+| Dev Spaces | [Dev Spaces 3.29 Installation](https://docs.redhat.com/en/documentation/red_hat_openshift_dev_spaces/3.29/html/installation_guide/) |
 | AI Code Assistants | [AI Code Assistants with Dev Spaces](https://developers.redhat.com/articles/2026/01/28/guide-ai-code-assistants-red-hat-openshift-dev-spaces) |
-| Gen AI Studio | [Experimenting with Models](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html-single/experimenting_with_models_in_the_gen_ai_playground/index) |
+| OGX | [Working with OGX (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/working_with_ogx/) |
+| Gen AI Playground | [Experimenting with models in the Gen AI Playground (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/experimenting_with_models_in_the_gen_ai_playground/index) |
+| In-cluster bootstrapper | [bootstrapper.md](bootstrapper.md) |
+| Web Terminal | [OpenShift Web terminal](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/web_console/web-terminal) |

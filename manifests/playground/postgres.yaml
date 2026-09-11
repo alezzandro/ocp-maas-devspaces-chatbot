@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ogx-postgres
+  namespace: models-as-a-service
+  labels:
+    app: ogx-postgres
+spec:
+  serviceName: ogx-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ogx-postgres
+  template:
+    metadata:
+      labels:
+        app: ogx-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRESQL_USER
+              value: ogx
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ogx-postgres-credentials
+                  key: password
+            - name: POSTGRESQL_DATABASE
+              value: ogx
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/pgsql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ogx-postgres
+  namespace: models-as-a-service
+  labels:
+    app: ogx-postgres
+spec:
+  selector:
+    app: ogx-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
