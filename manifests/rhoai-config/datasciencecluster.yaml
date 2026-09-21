@@ -8,7 +8,9 @@ spec:
       managementState: Managed
     kserve:
       managementState: Managed
-      modelsAsService:
+    aigateway:
+      managementState: Managed
+      modelsAsAService:
         managementState: Managed
     # OpenShift AI 3.5 control plane for Gen AI Studio / Playground.
     # Ray / Kueue / Training stay Removed so they do not steal the GPU.

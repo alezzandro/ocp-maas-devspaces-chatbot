@@ -20,6 +20,16 @@ sleep 5
 oc apply -f "${MANIFESTS_DIR}/platform-config/kuadrant/kuadrant.yaml"
 
 echo "   Waiting for Kuadrant to be ready..."
+# The operator often starts before Authorino/Limitador CSVs exist and stays
+# on MissingDependency until the controller pod is restarted.
+REASON=$(oc get kuadrant kuadrant -n kuadrant-system \
+  -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+if [[ "$REASON" == "MissingDependency" ]]; then
+  echo "   Restarting Kuadrant operator (MissingDependency on Authorino/Limitador)..."
+  oc rollout restart deployment/kuadrant-operator-controller-manager -n openshift-operators
+  oc rollout status deployment/kuadrant-operator-controller-manager -n openshift-operators --timeout=120s \
+    2>/dev/null || true
+fi
 oc wait kuadrant kuadrant -n kuadrant-system \
   --for=condition=Ready --timeout=300s 2>/dev/null || \
   echo "   Kuadrant may need more time to reconcile."
@@ -30,7 +40,8 @@ GATEWAY_YAML="${MANIFESTS_DIR}/platform-config/gateway/gateway.yaml"
 sed "s/CLUSTER_DOMAIN_PLACEHOLDER/${CLUSTER_DOMAIN}/g" "$GATEWAY_YAML" | oc apply -f -
 
 echo "4. Waiting for MaaS Gateway to reach Programmed=True..."
-TIMEOUT=120
+echo "   (GatewayClass is created by OpenShift AI MaaS in phase 4; Pending here is expected.)"
+TIMEOUT=60
 INTERVAL=15
 ELAPSED=0
 while true; do
@@ -41,7 +52,7 @@ while true; do
     break
   fi
   if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
-    echo "   WARNING: Gateway not yet Programmed after ${TIMEOUT}s."
+    echo "   Gateway not Programmed yet (${STATUS}). Phase 4 waits again after DSC."
     break
   fi
   echo "   Gateway status: ${STATUS} (${ELAPSED}s / ${TIMEOUT}s)"
@@ -126,15 +137,39 @@ spec:
   externalName: data-science-perses.redhat-ods-monitoring.svc.cluster.local
 SVCEOF
 
-echo "7. Fixing ServiceMonitor compatibility with user-workload monitoring..."
+echo "7. Fixing ServiceMonitor / PodMonitor compatibility with user-workload monitoring..."
 oc label servicemonitor nfd-controller-manager-metrics-monitor -n openshift-nfd \
   openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
 oc label servicemonitor odh-model-controller-metrics-monitor -n redhat-ods-applications \
+  openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+oc label servicemonitor controller-manager-metrics-monitor -n redhat-ods-applications \
   openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
 oc label servicemonitor tempo-operator-controller-manager-metrics-monitor -n openshift-operators \
   openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
 oc label servicemonitor opentelemetry-operator-metrics-monitor -n openshift-operators \
   openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+
+# Istio health port 15021 does not serve /stats/prometheus (HTTP 404) and
+# fires TargetDown for 1/3 of istio-pod-monitor targets.
+if oc get podmonitor istio-pod-monitor -n openshift-ingress &>/dev/null; then
+  if oc get podmonitor istio-pod-monitor -n openshift-ingress -o yaml | grep -q 'regex: "15021"'; then
+    echo "   istio-pod-monitor already drops port 15021."
+  else
+    oc patch podmonitor istio-pod-monitor -n openshift-ingress --type json -p '[
+      {"op":"add","path":"/spec/podMetricsEndpoints/0/relabelings/-","value":{
+        "action":"drop",
+        "regex":"15021",
+        "sourceLabels":["__meta_kubernetes_pod_container_port_number"]
+      }},
+      {"op":"add","path":"/spec/podMetricsEndpoints/0/relabelings/-","value":{
+        "action":"drop",
+        "regex":".*:15021$",
+        "sourceLabels":["__address__"]
+      }}
+    ]' 2>/dev/null || true
+    echo "   Dropped Istio health port 15021 from istio-pod-monitor."
+  fi
+fi
 
 echo ""
 echo "Phase 2 complete: Platform configured."

@@ -500,10 +500,30 @@ if [[ "${1:-}" == "--fix" ]]; then
     openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
   oc label servicemonitor odh-model-controller-metrics-monitor -n redhat-ods-applications \
     openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+  oc label servicemonitor controller-manager-metrics-monitor -n redhat-ods-applications \
+    openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
   oc label servicemonitor tempo-operator-controller-manager-metrics-monitor -n openshift-operators \
     openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
   oc label servicemonitor opentelemetry-operator-metrics-monitor -n openshift-operators \
     openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+
+  if oc get podmonitor istio-pod-monitor -n openshift-ingress &>/dev/null; then
+    if ! oc get podmonitor istio-pod-monitor -n openshift-ingress -o yaml | grep -q 'regex: "15021"'; then
+      echo ">>> Dropping Istio health port 15021 from istio-pod-monitor..."
+      oc patch podmonitor istio-pod-monitor -n openshift-ingress --type json -p '[
+        {"op":"add","path":"/spec/podMetricsEndpoints/0/relabelings/-","value":{
+          "action":"drop",
+          "regex":"15021",
+          "sourceLabels":["__meta_kubernetes_pod_container_port_number"]
+        }},
+        {"op":"add","path":"/spec/podMetricsEndpoints/0/relabelings/-","value":{
+          "action":"drop",
+          "regex":".*:15021$",
+          "sourceLabels":["__address__"]
+        }}
+      ]' 2>/dev/null || true
+    fi
+  fi
 
   # Fix 5: Prometheus secret (monitoring stack)
   if oc get configmap prometheus-web-tls-ca -n redhat-ods-monitoring &>/dev/null; then

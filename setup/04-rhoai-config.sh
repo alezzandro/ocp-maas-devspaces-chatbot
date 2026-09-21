@@ -169,6 +169,32 @@ while true; do
   ELAPSED=$((ELAPSED + INTERVAL))
 done
 
+echo "7b. Waiting for MaaS Gateway Programmed (GatewayClass exists after MaaS)..."
+TIMEOUT=180
+INTERVAL=15
+ELAPSED=0
+while true; do
+  GW=$(oc get gateway maas-default-gateway -n openshift-ingress \
+    -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null || echo "Unknown")
+  if [[ "$GW" == "True" ]]; then
+    echo "   Gateway is Programmed!"
+    break
+  fi
+  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+    echo "   WARNING: Gateway not Programmed after ${TIMEOUT}s (status=${GW})."
+    break
+  fi
+  echo "   Gateway Programmed=${GW} (${ELAPSED}s / ${TIMEOUT}s)"
+  sleep "$INTERVAL"
+  ELAPSED=$((ELAPSED + INTERVAL))
+done
+
+echo "7c. Re-labeling ServiceMonitors created by RHOAI (suppress bearerTokenFile rejections)..."
+oc label servicemonitor odh-model-controller-metrics-monitor -n redhat-ods-applications \
+  openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+oc label servicemonitor controller-manager-metrics-monitor -n redhat-ods-applications \
+  openshift.io/user-monitoring=false --overwrite 2>/dev/null || true
+
 echo "8. Waiting for control-plane DSC components (up to 180s)..."
 # Condition type names vary slightly by CSV; match on substring.
 wait_dsc_ready_substring() {
