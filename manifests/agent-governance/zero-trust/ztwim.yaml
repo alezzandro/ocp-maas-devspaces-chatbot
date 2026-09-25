@@ -1,0 +1,12 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: ZeroTrustWorkloadIdentityManager
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  trustDomain: "__TRUST_DOMAIN__"
+  clusterName: "agent-identity-demo"
+  bundleConfigMap: "spire-bundle"

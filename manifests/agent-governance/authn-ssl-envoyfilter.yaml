@@ -1,0 +1,48 @@
+# Authorino's gRPC port is TLS. Kuadrant adds the auth cluster in cleartext.
+# The Models-as-a-Service gateway gets a matching TLS patch from
+# odh-model-controller (maas-default-gateway-authn-ssl). This gateway is not
+# managed by that controller, so the lab carries its own patch. It targets
+# agent-mcp-gateway only.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: agent-mcp-gateway-authn-ssl
+  namespace: openshift-ingress
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: agent-mcp-gateway
+  priority: -1
+  configPatches:
+    - applyTo: CLUSTER
+      match:
+        cluster:
+          service: authorino-authorino-authorization.kuadrant-system.svc.cluster.local
+      patch:
+        operation: ADD
+        value:
+          name: kuadrant-auth-service
+          type: STRICT_DNS
+          connect_timeout: 1s
+          lb_policy: ROUND_ROBIN
+          http2_protocol_options: {}
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+              common_tls_context:
+                validation_context:
+                  trusted_ca:
+                    filename: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+          load_assignment:
+            cluster_name: kuadrant-auth-service
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: authorino-authorino-authorization.kuadrant-system.svc.cluster.local
+                          port_value: 50051

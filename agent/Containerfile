@@ -1,0 +1,15 @@
+FROM registry.access.redhat.com/ubi9/python-311:latest
+
+USER 0
+WORKDIR /opt/app
+COPY requirements.txt /opt/app/requirements.txt
+RUN pip install --no-cache-dir -r /opt/app/requirements.txt
+COPY app.py console.html /opt/app/
+RUN chmod 0755 /opt/app/app.py
+
+USER 1001
+ENV HOME=/opt/app \
+    SPIFFE_ENDPOINT_SOCKET=unix:///run/spire/sockets/spire-agent.sock \
+    JWT_AUDIENCE=mcp-gateway
+
+CMD ["sleep", "infinity"]

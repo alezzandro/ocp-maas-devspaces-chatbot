@@ -81,6 +81,7 @@ See [docs/architecture.md](docs/architecture.md) for the 3.5 request path, OGX P
 | 8 | `08-setup-subscriptions.sh` | 2 min | Two subscriptions + API keys |
 | 9 | `09-deploy-devspaces.sh` | 5-10 min | CheCluster + Continue ConfigMaps |
 | 10 | `10-deploy-chatbot.sh` | 2-5 min | Open WebUI (legacy function calling) |
+| optional | `11-agent-identity.sh` | 15-25 min | Presenter page for two SPIFFE identities and MCP tool policy. Not part of `full-setup.sh`. |
 
 Laptop-free: apply `manifests/bootstrapper/` instead of running phases on a laptop. The keep-alive pod clones this git repo and executes `setup/full-setup.sh` (phases 0–10). See [docs/bootstrapper.md](docs/bootstrapper.md).
 
@@ -101,6 +102,11 @@ bash setup/reset-demo.sh
 
 # Full teardown (also removes rh-demo-bootstrapper; keeps Web Terminal Operator)
 bash setup/uninstall-demo.sh
+
+# Optional agent-identity lab (after phases 0-10). Does not run with full-setup.sh.
+bash setup/11-agent-identity.sh
+bash setup/11-verify-agent-identity.sh
+bash setup/11-uninstall-agent-identity.sh
 ```
 
 ## Documentation
@@ -139,6 +145,8 @@ See [docs/demo-guide.md](docs/demo-guide.md) for the full presenter script with:
 - [OCP GPU Provisioner](https://github.com/alezzandro/ocp-gpu-provisioner-aws)
 - [AI Code Assistants with Dev Spaces](https://developers.redhat.com/articles/2026/01/28/guide-ai-code-assistants-red-hat-openshift-dev-spaces)
 - [In-cluster demo bootstrapper](docs/bootstrapper.md) — UBI9 image `apps/demo-bootstrapper/Containerfile`, `quay.io/aarrichi/rh-demo-bootstrapper:ubi9-1`
+- [Constraining AI agents with Red Hat AI](https://developers.redhat.com/articles/2026/09/16/constraining-ai-agents-with-red-hat-ai-containment-identity-and-governance)
+- [Zero Trust Workload Identity Manager (OpenShift 4.22)](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/security_and_compliance/zero-trust-workload-identity-manager)
 
 ## License
 

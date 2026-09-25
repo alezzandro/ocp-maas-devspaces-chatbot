@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: agent-console
+  namespace: agent-governance
+  labels:
+    app: agent-console
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  host: agent-console.__CLUSTER_DOMAIN__
+  to:
+    kind: Service
+    name: agent-console
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

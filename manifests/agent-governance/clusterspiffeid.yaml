@@ -1,0 +1,21 @@
+# Registers both ServiceAccounts. The SPIFFE ID includes the ServiceAccount
+# name, so platform-agent and untrusted-agent receive different identities.
+# Do not edit the operator default ClusterSPIFFEID.
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: agent-governance-workloads
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  className: zero-trust-workload-identity-manager-spire
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}"
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: agent-governance
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/part-of
+        operator: In
+        values:
+          - agent-identity-lab

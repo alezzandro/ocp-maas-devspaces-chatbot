@@ -1,0 +1,18 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireRunAsNonRoot
+metadata:
+  name: agent-governance-run-as-non-root
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  enforcementAction: deny
+  match:
+    scope: Namespaced
+    namespaces:
+      - agent-governance
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/part-of: agent-identity-lab
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]

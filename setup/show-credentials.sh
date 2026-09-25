@@ -57,4 +57,13 @@ echo "Dev Spaces key: ${DEVSPACES_KEY:0:20}..."
 echo "Chatbot key:    ${CHATBOT_KEY:0:20}..."
 
 echo ""
+echo "--- Agent identity (optional) ---"
+AGENT_CONSOLE=$(oc get route agent-console -n agent-governance -o jsonpath='{.spec.host}' 2>/dev/null || true)
+if [[ -n "${AGENT_CONSOLE}" ]]; then
+  echo "Presenter page: https://${AGENT_CONSOLE}"
+else
+  echo "Not installed. After phases 0-10: bash setup/11-agent-identity.sh"
+fi
+
+echo ""
 echo "========================================="

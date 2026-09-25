@@ -1,0 +1,47 @@
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: agent-mcp-auth
+  namespace: openshift-ingress
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agent-mcp-gateway
+  rules:
+    authentication:
+      spiffe-jwt:
+        jwt:
+          # HTTP on purpose. Authorino's TLS trust file is missing in this
+          # cluster, so an HTTPS JWKS URL fails closed. The proxy republishes
+          # the SPIRE key set; it still checks issuer, audience, and tool name.
+          jwksUrl: "http://mcp-policy-proxy.agent-governance.svc.cluster.local:8080/keys"
+        credentials:
+          authorizationHeader:
+            prefix: Bearer
+    authorization:
+      platform-agent-tools:
+        patternMatching:
+          patterns:
+            - all:
+                - selector: auth.identity.sub
+                  operator: eq
+                  value: "spiffe://__TRUST_DOMAIN__/ns/agent-governance/sa/platform-agent"
+                - any:
+                    - selector: context.request.http.headers.x-mcp-toolname
+                      operator: eq
+                      value: pods_list
+                    - selector: context.request.http.headers.x-mcp-toolname
+                      operator: eq
+                      value: pods_get
+                    - selector: context.request.http.headers.x-mcp-toolname
+                      operator: eq
+                      value: events_list
+                    - selector: context.request.http.headers.x-mcp-toolname
+                      operator: eq
+                      value: namespaces_list
+                    - selector: context.request.http.headers.x-mcp-toolname
+                      operator: eq
+                      value: mcp-initialize

@@ -1,0 +1,26 @@
+# Second gateway on data-science-gateway-class. Hostname is unique.
+# opendatahub.io/managed=false keeps odh-model-controller from attaching
+# an AuthPolicy here. targetRef of agent-mcp-auth must stay this gateway.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: agent-mcp-gateway
+  namespace: openshift-ingress
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+  annotations:
+    opendatahub.io/managed: "false"
+spec:
+  gatewayClassName: data-science-gateway-class
+  listeners:
+    - name: mcp
+      hostname: "agent-mcp.__CLUSTER_DOMAIN__"
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: cert-manager-ingress-cert
+      allowedRoutes:
+        namespaces:
+          from: All

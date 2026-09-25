@@ -1,0 +1,31 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: platform-agent
+  namespace: agent-governance
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: platform-agent
+  namespace: agent-governance
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: platform-agent:latest
+  successfulBuildsHistoryLimit: 2
+  failedBuildsHistoryLimit: 2

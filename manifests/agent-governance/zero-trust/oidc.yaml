@@ -1,0 +1,13 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireOIDCDiscoveryProvider
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  logLevel: "info"
+  logFormat: "text"
+  csiDriverName: "csi.spiffe.io"
+  jwtIssuer: "__JWT_ISSUER__"
+  replicaCount: 1
+  managedRoute: "true"

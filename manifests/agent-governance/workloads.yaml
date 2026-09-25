@@ -1,0 +1,332 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-policy-proxy
+  namespace: agent-governance
+  labels:
+    app: mcp-policy-proxy
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  selector:
+    app: mcp-policy-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-policy-proxy
+  namespace: agent-governance
+  labels:
+    app: mcp-policy-proxy
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-policy-proxy
+  template:
+    metadata:
+      labels:
+        app: mcp-policy-proxy
+        app.kubernetes.io/part-of: agent-identity-lab
+    spec:
+      serviceAccountName: mcp-policy-proxy
+      containers:
+        - name: proxy
+          image: __AGENT_IMAGE__
+          imagePullPolicy: Always
+          command: ["python3", "/opt/app/app.py", "serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HOME
+              value: /tmp
+            - name: TRUST_DOMAIN
+              value: "__TRUST_DOMAIN__"
+            - name: JWT_ISSUER
+              value: "__JWT_ISSUER__"
+            - name: JWT_AUDIENCE
+              value: mcp-gateway
+            - name: OIDC_JWKS_URL
+              value: "__OIDC_JWKS_URL__"
+            - name: UPSTREAM_MCP_URL
+              value: http://openshift-mcp-server.models-as-a-service.svc.cluster.local:8080/mcp
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-agent
+  namespace: agent-governance
+  labels:
+    app: platform-agent
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform-agent
+  template:
+    metadata:
+      labels:
+        app: platform-agent
+        app.kubernetes.io/part-of: agent-identity-lab
+    spec:
+      serviceAccountName: platform-agent
+      containers:
+        - name: agent
+          image: __AGENT_IMAGE__
+          imagePullPolicy: Always
+          command: ["python3", "/opt/app/app.py", "agent"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HOME
+              value: /tmp
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: unix:///run/spire/sockets/spire-agent.sock
+            - name: TRUST_DOMAIN
+              value: "__TRUST_DOMAIN__"
+            - name: JWT_ISSUER
+              value: "__JWT_ISSUER__"
+            - name: JWT_AUDIENCE
+              value: mcp-gateway
+            - name: PROXY_URL
+              value: http://mcp-policy-proxy.agent-governance.svc.cluster.local:8080/mcp
+            - name: VLLM_URL
+              value: https://qwen3-8b-fp8-kserve-workload-svc.models-as-a-service.svc.cluster.local:8000/v1/chat/completions
+            - name: VLLM_MODEL
+              value: qwen3-8b-fp8
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: spiffe-workload-api
+              mountPath: /run/spire/sockets
+              readOnly: true
+      volumes:
+        - name: spiffe-workload-api
+          csi:
+            driver: csi.spiffe.io
+            readOnly: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: untrusted-agent
+  namespace: agent-governance
+  labels:
+    app: untrusted-agent
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: untrusted-agent
+  template:
+    metadata:
+      labels:
+        app: untrusted-agent
+        app.kubernetes.io/part-of: agent-identity-lab
+    spec:
+      serviceAccountName: untrusted-agent
+      containers:
+        - name: agent
+          image: __AGENT_IMAGE__
+          imagePullPolicy: Always
+          command: ["python3", "/opt/app/app.py", "agent"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: HOME
+              value: /tmp
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: unix:///run/spire/sockets/spire-agent.sock
+            - name: TRUST_DOMAIN
+              value: "__TRUST_DOMAIN__"
+            - name: JWT_ISSUER
+              value: "__JWT_ISSUER__"
+            - name: JWT_AUDIENCE
+              value: mcp-gateway
+            - name: PROXY_URL
+              value: http://mcp-policy-proxy.agent-governance.svc.cluster.local:8080/mcp
+            - name: VLLM_URL
+              value: https://qwen3-8b-fp8-kserve-workload-svc.models-as-a-service.svc.cluster.local:8000/v1/chat/completions
+            - name: VLLM_MODEL
+              value: qwen3-8b-fp8
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: spiffe-workload-api
+              mountPath: /run/spire/sockets
+              readOnly: true
+      volumes:
+        - name: spiffe-workload-api
+          csi:
+            driver: csi.spiffe.io
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-agent
+  namespace: agent-governance
+  labels:
+    app: platform-agent
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  selector:
+    app: platform-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: untrusted-agent
+  namespace: agent-governance
+  labels:
+    app: untrusted-agent
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  selector:
+    app: untrusted-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-console
+  namespace: agent-governance
+  labels:
+    app: agent-console
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  selector:
+    app: agent-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-console
+  namespace: agent-governance
+  labels:
+    app: agent-console
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-console
+  template:
+    metadata:
+      labels:
+        app: agent-console
+        app.kubernetes.io/part-of: agent-identity-lab
+    spec:
+      serviceAccountName: agent-console
+      containers:
+        - name: console
+          image: __AGENT_IMAGE__
+          imagePullPolicy: Always
+          command: ["python3", "/opt/app/app.py", "console"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            exec:
+              command:
+                - python3
+                - -c
+                - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

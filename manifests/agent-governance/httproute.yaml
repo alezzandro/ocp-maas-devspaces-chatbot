@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: agent-mcp
+  namespace: agent-governance
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  parentRefs:
+    - name: agent-mcp-gateway
+      namespace: openshift-ingress
+  hostnames:
+    - "agent-mcp.__CLUSTER_DOMAIN__"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: mcp-policy-proxy
+          port: 8080

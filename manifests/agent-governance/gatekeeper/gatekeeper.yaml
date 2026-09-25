@@ -1,0 +1,12 @@
+apiVersion: operator.gatekeeper.sh/v1alpha1
+kind: Gatekeeper
+metadata:
+  name: gatekeeper
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  validatingWebhook: Enabled
+  mutatingWebhook: Disabled
+  webhook:
+    failurePolicy: Ignore
+    timeoutSeconds: 3

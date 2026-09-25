@@ -341,6 +341,20 @@ Before starting the live demo:
 - The live coding demo (screen 5) is the most impactful -- don't rush it
 - Have a fallback prompt ready if the model takes too long to respond
 
+## Optional act: agent identity
+
+Run this only after phases 0–10. It is not part of `setup/full-setup.sh`.
+
+The act adds a presenter page at `https://agent-console.<cluster-domain>`. Open that page. Pick the platform agent, list pods, then try pod logs. Switch to the untrusted agent and list pods again. The walkthrough is in [agent-identity.md](agent-identity.md). Kata, OpenShell, and NeMo Guardrails are not installed.
+
+```bash
+bash setup/11-agent-identity.sh
+bash setup/11-verify-agent-identity.sh
+bash setup/11-uninstall-agent-identity.sh
+```
+
+Presenter notes: [agent-identity.md](agent-identity.md). Kata, OpenShell, and NeMo Guardrails are not installed.
+
 ## Overnight / in-cluster setup
 
 If the cluster was installed with the [in-cluster bootstrapper](bootstrapper.md), the `demo-bootstrapper` pod stays Running after success or failure. Attach from the console masthead **Web Terminal** (`oc rsh -n rh-demo-bootstrapper deploy/demo-bootstrapper`) or Pod Terminal. Status files live on the PVC: `/work/status`, `/work/setup.log`.
@@ -364,3 +378,4 @@ Do **not** scale `LLMInferenceService` `qwen3-8b-fp8` to 0 between visitors unle
 | Gen AI Playground | [Experimenting with models in the Gen AI Playground (3.5)](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/experimenting_with_models_in_the_gen_ai_playground/index) |
 | In-cluster bootstrapper | [bootstrapper.md](bootstrapper.md) |
 | Web Terminal | [OpenShift Web terminal](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/web_console/web-terminal) |
+| Agent identity (optional) | [Constraining AI agents with Red Hat AI](https://developers.redhat.com/articles/2026/09/16/constraining-ai-agents-with-red-hat-ai-containment-identity-and-governance) and [Zero Trust Workload Identity Manager](https://docs.redhat.com/en/documentation/openshift_container_platform/4.22/html/security_and_compliance/zero-trust-workload-identity-manager) |

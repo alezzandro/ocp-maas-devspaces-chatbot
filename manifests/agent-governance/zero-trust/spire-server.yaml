@@ -1,0 +1,29 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/part-of: agent-identity-lab
+spec:
+  logLevel: "info"
+  logFormat: "text"
+  jwtIssuer: "__JWT_ISSUER__"
+  caValidity: "24h"
+  defaultX509Validity: "1h"
+  defaultJWTValidity: "30m"
+  jwtKeyType: "rsa-2048"
+  caSubject:
+    country: "US"
+    organization: "Red Hat"
+    commonName: "SPIRE Server CA"
+  persistence:
+    size: "1Gi"
+    accessMode: "ReadWriteOnce"
+    storageClass: "__STORAGE_CLASS__"
+  datastore:
+    databaseType: "sqlite3"
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    maxOpenConns: 100
+    maxIdleConns: 10
+    connMaxLifetime: 0
+    disableMigration: "false"
