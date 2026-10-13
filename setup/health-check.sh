@@ -727,6 +727,35 @@ EOF
   done
   oc delete maasmodelref qwen3-8b -n models-as-a-service --ignore-not-found || true
 
+  # Kuadrant caches MissingDependency until its pod is recreated, and the
+  # gateway auth cluster requires Authorino listener TLS. Without both, every
+  # MaaS call is HTTP 500 (wasm: gRPC status code is not OK) or anonymous 200.
+  AUTH_REASON=$(oc get authpolicy maas-gateway-auth -n openshift-ingress \
+    -o jsonpath='{.status.conditions[?(@.type=="Accepted")].reason}' 2>/dev/null || echo "")
+  if [[ "$AUTH_REASON" == "MissingDependency" ]]; then
+    echo ""
+    echo ">>> Recreating the Kuadrant operator pod (Authorino dependency was cached as missing)..."
+    oc delete pod -n openshift-operators -l app=kuadrant,control-plane=controller-manager \
+      --wait=true 2>/dev/null || true
+    oc wait kuadrant kuadrant -n kuadrant-system --for=condition=Ready --timeout=180s \
+      2>/dev/null || true
+  fi
+  TLS_ON=$(oc get authorino authorino -n kuadrant-system \
+    -o jsonpath='{.spec.listener.tls.enabled}' 2>/dev/null || echo "false")
+  if [[ "$TLS_ON" != "true" ]] && oc get svc authorino-authorino-authorization -n kuadrant-system &>/dev/null; then
+    echo ""
+    echo ">>> Enabling Authorino listener TLS for the MaaS gateway auth cluster..."
+    oc annotate service authorino-authorino-authorization -n kuadrant-system \
+      service.beta.openshift.io/serving-cert-secret-name=authorino-server-cert --overwrite 2>/dev/null || true
+    for _ in $(seq 1 30); do
+      oc get secret authorino-server-cert -n kuadrant-system &>/dev/null && break
+      sleep 2
+    done
+    oc patch authorino authorino -n kuadrant-system --type=merge --patch '{
+      "spec": {"listener": {"tls": {"enabled": true, "certSecretRef": {"name": "authorino-server-cert"}}}}
+    }' 2>/dev/null || true
+  fi
+
   # Fix 10: Gen AI Playground (CPU OGXServer + OpenShift MCP)
   echo ""
   echo ">>> Ensuring Gen AI Playground (OGXServer + MCP)..."
@@ -821,11 +850,16 @@ print(p.read_text().replace('INFERENCE_MODEL_PLACEHOLDER', sys.argv[2]))
       ENABLE_WEB_SEARCH=false ENABLE_IMAGE_GENERATION=false \
       ENABLE_CODE_INTERPRETER=false ENABLE_CODE_EXECUTION=false \
       2>/dev/null || true
-    oc exec -n open-webui deploy/open-webui -- python3 -c '
+    PATCHED=0
+    for _ in $(seq 1 24); do
+      if oc exec -n open-webui deploy/open-webui -- python3 -c '
 import json, sqlite3, time
 db = "/app/backend/data/webui.db"
 con = sqlite3.connect(db)
 cur = con.cursor()
+tables = [row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type=\"table\"")]
+if "config" not in tables:
+    raise SystemExit(1)
 now = int(time.time() * 1000)
 updates = {
     "models.default_params": {"function_calling": "legacy"},
@@ -843,7 +877,16 @@ for key, value in updates.items():
     )
 con.commit()
 print("webui config patched")
-' 2>/dev/null || echo "    WARNING: could not patch Open WebUI sqlite"
+'; then
+        PATCHED=1
+        break
+      fi
+      echo "    Waiting for the Open WebUI config table..."
+      sleep 5
+    done
+    if [[ "$PATCHED" -ne 1 ]]; then
+      echo "    WARNING: could not patch Open WebUI sqlite"
+    fi
   fi
 
   # Leftover bootstrapper retry after a completed install. Do not re-run setup.

@@ -20,19 +20,41 @@ sleep 5
 oc apply -f "${MANIFESTS_DIR}/platform-config/kuadrant/kuadrant.yaml"
 
 echo "   Waiting for Kuadrant to be ready..."
-# The operator often starts before Authorino/Limitador CSVs exist and stays
-# on MissingDependency until the controller pod is restarted.
-REASON=$(oc get kuadrant kuadrant -n kuadrant-system \
-  -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
-if [[ "$REASON" == "MissingDependency" ]]; then
-  echo "   Restarting Kuadrant operator (MissingDependency on Authorino/Limitador)..."
-  oc rollout restart deployment/kuadrant-operator-controller-manager -n openshift-operators
-  oc rollout status deployment/kuadrant-operator-controller-manager -n openshift-operators --timeout=120s \
-    2>/dev/null || true
-fi
-oc wait kuadrant kuadrant -n kuadrant-system \
-  --for=condition=Ready --timeout=300s 2>/dev/null || \
-  echo "   Kuadrant may need more time to reconcile."
+# The operator often starts before the Authorino CSV exists and caches
+# MissingDependency until its pod is recreated. OLM restores the Deployment
+# after `oc rollout restart`, so delete the pod instead. Re-check during the
+# wait: the reason is empty for a while after the Kuadrant CR is created.
+TIMEOUT=300
+ELAPSED=0
+RESTARTED=0
+while true; do
+  STATUS=$(oc get kuadrant kuadrant -n kuadrant-system \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+  REASON=$(oc get kuadrant kuadrant -n kuadrant-system \
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
+  if [[ "$STATUS" == "True" ]]; then
+    echo "   Kuadrant is Ready."
+    break
+  fi
+  if [[ "$REASON" == "MissingDependency" && "$RESTARTED" -eq 0 ]]; then
+    AUTHORINO_PHASE=$(oc get csv -n openshift-operators --no-headers 2>/dev/null \
+      | awk '/^authorino-operator/ {print $NF; exit}')
+    if [[ "$AUTHORINO_PHASE" == "Succeeded" ]]; then
+      echo "   Recreating the Kuadrant operator pod (MissingDependency, Authorino CSV is Succeeded)..."
+      oc delete pod -n openshift-operators -l app=kuadrant,control-plane=controller-manager \
+        --wait=true 2>/dev/null || true
+      RESTARTED=1
+      ELAPSED=0
+    fi
+  fi
+  if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+    echo "   Kuadrant may need more time to reconcile (reason=${REASON:-unknown})."
+    break
+  fi
+  echo "   Kuadrant status: ${STATUS:-pending} (${REASON:-none}) (${ELAPSED}s / ${TIMEOUT}s)"
+  sleep 10
+  ELAPSED=$((ELAPSED + 10))
+done
 
 echo "3. Creating MaaS Gateway..."
 echo "   (Uses existing data-science-gateway-class and wildcard TLS cert)"

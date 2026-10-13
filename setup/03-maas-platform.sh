@@ -36,32 +36,51 @@ oc create secret generic maas-db-config \
   --dry-run=client -o yaml | oc apply -f -
 
 echo "4. Configuring Authorino TLS..."
-oc annotate service authorino-authorino-authorization \
-  -n kuadrant-system \
-  service.beta.openshift.io/serving-cert-secret-name=authorino-server-cert \
-  --overwrite 2>/dev/null || echo "   Authorino service not yet available, will retry..."
-
-sleep 5
-
-echo "5. Patching Authorino CR for TLS..."
-oc patch authorino authorino -n kuadrant-system --type=merge --patch '{
-  "spec": {
-    "listener": {
-      "tls": {
-        "enabled": true,
-        "certSecretRef": {
-          "name": "authorino-server-cert"
+# The MaaS gateway EnvoyFilter talks TLS to Authorino:50051 and trusts the
+# OpenShift service CA. Kuadrant creates the Authorino CR with TLS disabled.
+# A one-shot patch races that create, so retry until the service and CR exist.
+# Do not point SSL_CERT_FILE at the service-ca bundle: that file is not mounted
+# in the Authorino pod, and a missing path fails closed on outbound HTTPS.
+TLS_WAIT=180
+TLS_ELAPSED=0
+while true; do
+  if oc get authorino authorino -n kuadrant-system &>/dev/null \
+     && oc get svc authorino-authorino-authorization -n kuadrant-system &>/dev/null; then
+    oc annotate service authorino-authorino-authorization \
+      -n kuadrant-system \
+      service.beta.openshift.io/serving-cert-secret-name=authorino-server-cert \
+      --overwrite
+    for _ in $(seq 1 30); do
+      oc get secret authorino-server-cert -n kuadrant-system &>/dev/null && break
+      sleep 2
+    done
+    oc patch authorino authorino -n kuadrant-system --type=merge --patch '{
+      "spec": {
+        "listener": {
+          "tls": {
+            "enabled": true,
+            "certSecretRef": {
+              "name": "authorino-server-cert"
+            }
+          }
         }
       }
-    }
-  }
-}' 2>/dev/null || echo "   Authorino CR not yet available. Will be configured when RHOAI reconciles."
-
-echo "6. Setting Authorino TLS environment variables..."
-oc -n kuadrant-system set env deployment/authorino \
-  SSL_CERT_FILE=/etc/ssl/certs/openshift-service-ca/service-ca-bundle.crt \
-  REQUESTS_CA_BUNDLE=/etc/ssl/certs/openshift-service-ca/service-ca-bundle.crt \
-  2>/dev/null || echo "   Authorino deployment not yet ready."
+    }'
+    TLS_ON=$(oc get authorino authorino -n kuadrant-system \
+      -o jsonpath='{.spec.listener.tls.enabled}' 2>/dev/null || echo "false")
+    if [[ "$TLS_ON" == "true" ]] && oc get secret authorino-server-cert -n kuadrant-system &>/dev/null; then
+      echo "   Authorino listener TLS enabled."
+      break
+    fi
+  fi
+  if [[ "$TLS_ELAPSED" -ge "$TLS_WAIT" ]]; then
+    echo "   WARNING: Authorino TLS not configured after ${TLS_WAIT}s. Gateway auth will return HTTP 500."
+    break
+  fi
+  echo "   Authorino not ready for TLS yet (${TLS_ELAPSED}s / ${TLS_WAIT}s)"
+  sleep 10
+  TLS_ELAPSED=$((TLS_ELAPSED + 10))
+done
 
 echo ""
 echo "Phase 3 complete: MaaS platform infrastructure ready."

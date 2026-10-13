@@ -43,11 +43,17 @@ oc wait deployment/open-webui -n open-webui \
 # ConfigVars persist on the PVC after first start, so env alone does not update
 # an existing instance. Patch sqlite, then restart so in-memory config reloads.
 echo "7. Forcing legacy function calling (Open WebUI 0.10+ Native/Agentic default)..."
-oc exec -n open-webui deploy/open-webui -- python3 -c '
+# The Deployment is Available before Alembic creates the config table.
+PATCHED=0
+for _ in $(seq 1 24); do
+  if oc exec -n open-webui deploy/open-webui -- python3 -c '
 import json, sqlite3, time
 db = "/app/backend/data/webui.db"
 con = sqlite3.connect(db)
 cur = con.cursor()
+tables = [row[0] for row in cur.execute("SELECT name FROM sqlite_master WHERE type=\"table\"")]
+if "config" not in tables:
+    raise SystemExit(1)
 now = int(time.time() * 1000)
 updates = {
     "models.default_params": {"function_calling": "legacy"},
@@ -66,9 +72,19 @@ for key, value in updates.items():
     print("set", key, stored)
 con.commit()
 print("webui config patched")
-' && oc rollout restart deployment/open-webui -n open-webui && \
-  oc rollout status deployment/open-webui -n open-webui --timeout=180s || \
+'; then
+    PATCHED=1
+    break
+  fi
+  echo "   Waiting for the Open WebUI config table..."
+  sleep 5
+done
+if [[ "$PATCHED" -eq 1 ]]; then
+  oc rollout restart deployment/open-webui -n open-webui
+  oc rollout status deployment/open-webui -n open-webui --timeout=180s
+else
   echo "   WARNING: could not patch Open WebUI sqlite; new PVCs still pick DEFAULT_MODEL_PARAMS from env."
+fi
 
 ROUTE_URL=$(oc get route open-webui -n open-webui -o jsonpath='{.spec.host}' 2>/dev/null || echo "")
 

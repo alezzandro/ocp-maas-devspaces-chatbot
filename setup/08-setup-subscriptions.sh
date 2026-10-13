@@ -61,7 +61,30 @@ oc annotate llminferenceservice "${LLM_NAME}" -n models-as-a-service \
   security.opendatahub.io/enable-auth=true --overwrite 2>/dev/null || true
 oc delete authpolicy maas-default-gateway-authn -n openshift-ingress --ignore-not-found
 oc delete authpolicy "${LLM_NAME}-kserve-route-authn" -n models-as-a-service --ignore-not-found
-AUTH_WAIT=90
+AUTH_REASON=$(oc get authpolicy maas-gateway-auth -n openshift-ingress \
+  -o jsonpath='{.status.conditions[?(@.type=="Accepted")].reason}' 2>/dev/null || echo "")
+if [[ "$AUTH_REASON" == "MissingDependency" ]]; then
+  echo "   Kuadrant still reports Authorino missing. Recreating the operator pod..."
+  oc delete pod -n openshift-operators -l app=kuadrant,control-plane=controller-manager \
+    --wait=true 2>/dev/null || true
+  oc wait kuadrant kuadrant -n kuadrant-system --for=condition=Ready --timeout=180s \
+    2>/dev/null || true
+fi
+TLS_ON=$(oc get authorino authorino -n kuadrant-system \
+  -o jsonpath='{.spec.listener.tls.enabled}' 2>/dev/null || echo "false")
+if [[ "$TLS_ON" != "true" ]] && oc get svc authorino-authorino-authorization -n kuadrant-system &>/dev/null; then
+  echo "   Enabling Authorino listener TLS so the gateway auth cluster can connect..."
+  oc annotate service authorino-authorino-authorization -n kuadrant-system \
+    service.beta.openshift.io/serving-cert-secret-name=authorino-server-cert --overwrite
+  for _ in $(seq 1 30); do
+    oc get secret authorino-server-cert -n kuadrant-system &>/dev/null && break
+    sleep 2
+  done
+  oc patch authorino authorino -n kuadrant-system --type=merge --patch '{
+    "spec": {"listener": {"tls": {"enabled": true, "certSecretRef": {"name": "authorino-server-cert"}}}}
+  }' 2>/dev/null || true
+fi
+AUTH_WAIT=180
 AUTH_ELAPSED=0
 while true; do
   ENFORCED=$(oc get authpolicy maas-gateway-auth -n openshift-ingress \
