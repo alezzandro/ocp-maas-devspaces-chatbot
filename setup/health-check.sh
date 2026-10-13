@@ -38,8 +38,36 @@ echo ""
 # ─── 2. GPU Operator ────────────────────────────────────────────────────────────
 echo "2. NVIDIA GPU Operator"
 GPU_STATE=$(oc get clusterpolicy gpu-cluster-policy -o jsonpath='{.status.state}' 2>/dev/null || echo "missing")
+# OnDelete driver DaemonSets keep numberReady=desired while updatedNumberScheduled
+# stays 0 until the pod is recreated. ClusterPolicy then reports state-driver
+# notReady even though the GPU is allocatable. JSON omitempty hides a 0.
+DRIVER_UPDATED_LAG=0
+if [[ "$GPU_STATE" != "ready" ]]; then
+  DRIVER_UPDATED_LAG=$(oc get ds -n nvidia-gpu-operator -o json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print(0)
+    sys.exit(0)
+lag = 0
+for ds in data.get("items", []):
+    name = ds.get("metadata", {}).get("name", "")
+    if "driver-daemonset" not in name:
+        continue
+    st = ds.get("status", {})
+    desired = int(st.get("desiredNumberScheduled") or 0)
+    ready = int(st.get("numberReady") or 0)
+    updated = int(st.get("updatedNumberScheduled") or 0)
+    if desired >= 1 and ready >= desired and updated < desired:
+        lag = 1
+print(lag)
+' || echo 0)
+fi
 if [[ "$GPU_STATE" == "ready" ]]; then
   check_pass "ClusterPolicy: ready"
+elif [[ "$DRIVER_UPDATED_LAG" == "1" ]]; then
+  check_warn "ClusterPolicy: ${GPU_STATE} because the driver DaemonSet is one OnDelete revision behind. --fix recreates that pod only when no model pod is Running."
 else
   check_warn "ClusterPolicy: $GPU_STATE (may need recovery — see below)"
 fi
@@ -390,6 +418,50 @@ else
 fi
 echo ""
 
+# ─── 13. Agent identity (optional overlay) ──────────────────────────────────────
+echo "13. Agent identity (optional)"
+AGENT_IDENTITY_INSTALLED=0
+SPIRE_DESIRED=0
+SPIRE_READY=0
+OIDC_READY=0
+if oc get ns zero-trust-workload-identity-manager &>/dev/null; then
+  AGENT_IDENTITY_INSTALLED=1
+  SPIRE_DESIRED=$(oc get ds spire-agent -n zero-trust-workload-identity-manager \
+    -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo "0")
+  SPIRE_READY=$(oc get ds spire-agent -n zero-trust-workload-identity-manager \
+    -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+  SPIRE_DESIRED=${SPIRE_DESIRED:-0}
+  SPIRE_READY=${SPIRE_READY:-0}
+  if [[ "$SPIRE_DESIRED" -ge 1 && "$SPIRE_READY" -ge "$SPIRE_DESIRED" ]]; then
+    check_pass "SPIRE agent: ${SPIRE_READY}/${SPIRE_DESIRED} Ready"
+  else
+    check_fail "SPIRE agent: ${SPIRE_READY}/${SPIRE_DESIRED} Ready (stale bundle after a server CA rotation; --fix restarts agents that are not Ready)"
+  fi
+  OIDC_READY=$(oc get deploy spire-spiffe-oidc-discovery-provider \
+    -n zero-trust-workload-identity-manager -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  OIDC_READY=${OIDC_READY:-0}
+  if [[ "$OIDC_READY" -ge 1 ]]; then
+    check_pass "SPIRE OIDC discovery provider: Ready"
+  else
+    check_fail "SPIRE OIDC discovery provider: not Ready (--fix restarts it once the agents are Ready)"
+  fi
+  if oc get ns agent-governance &>/dev/null; then
+    for dep in platform-agent untrusted-agent mcp-policy-proxy agent-console; do
+      DEP_READY=$(oc get deploy "${dep}" -n agent-governance \
+        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+      DEP_READY=${DEP_READY:-0}
+      if [[ "$DEP_READY" -ge 1 ]]; then
+        check_pass "agent-governance/${dep}: Ready"
+      else
+        check_fail "agent-governance/${dep}: not Ready"
+      fi
+    done
+  fi
+else
+  check_warn "Zero Trust Workload Identity Manager is not installed (optional lab)"
+fi
+echo ""
+
 # ─── Summary ────────────────────────────────────────────────────────────────────
 echo "========================================="
 if [[ "$ERRORS" -eq 0 ]]; then
@@ -407,8 +479,54 @@ if [[ "${1:-}" == "--fix" ]]; then
   echo "Attempting automatic recovery..."
   echo "========================================="
 
-  # Fix 1: GPU driver stuck after reboot
-  if [[ "$GPU_STATE" != "ready" || "$GPU_ALLOC" -lt 1 ]]; then
+  # Fix 1: GPU driver stuck after reboot.
+  # ClusterPolicy stays notReady when the OnDelete driver pod is one revision
+  # behind, even with the GPU allocatable. Scaling inference to 0 in that case
+  # takes down a working model. Recreate the driver pod only when the GPU is
+  # idle. The full reinstall runs only when the node is not advertising a GPU.
+  LLM_RUNNING_NOW=$(oc get pods -n models-as-a-service -l app.kubernetes.io/name="${LLM_NAME}" \
+    --no-headers 2>/dev/null | awk '$3=="Running"' | wc -l)
+  if [[ "$DRIVER_UPDATED_LAG" == "1" && "$GPU_ALLOC" -ge 1 && "${LLM_RUNNING_NOW}" -ge 1 ]]; then
+    echo ""
+    echo ">>> GPU is allocatable and inference is Running."
+    echo "    Leaving the OnDelete driver pod in place so the model keeps the device."
+  elif [[ "$DRIVER_UPDATED_LAG" == "1" && "$GPU_ALLOC" -ge 1 ]]; then
+    echo ""
+    echo ">>> Recreating NVIDIA driver pods to finish the OnDelete rollout..."
+    oc delete pod -n nvidia-gpu-operator -l app.kubernetes.io/component=nvidia-driver \
+      --wait=false 2>/dev/null || true
+    TIMEOUT=300
+    INTERVAL=15
+    ELAPSED=0
+    while true; do
+      STATE=$(oc get clusterpolicy gpu-cluster-policy -o jsonpath='{.status.state}' 2>/dev/null || echo "unknown")
+      UPDATED=$(oc get ds -n nvidia-gpu-operator -o json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print(0)
+    sys.exit(0)
+updated = 0
+for ds in data.get("items", []):
+    if "driver-daemonset" not in ds.get("metadata", {}).get("name", ""):
+        continue
+    updated = int(ds.get("status", {}).get("updatedNumberScheduled") or 0)
+print(updated)
+' || echo 0)
+      if [[ "$STATE" == "ready" || "$UPDATED" -ge 1 ]]; then
+        echo "    Driver rollout refreshed (ClusterPolicy: ${STATE}, updated: ${UPDATED})."
+        break
+      fi
+      if [[ "$ELAPSED" -ge "$TIMEOUT" ]]; then
+        echo "    WARNING: driver DaemonSet still not updated after ${TIMEOUT}s."
+        break
+      fi
+      echo "    GPU state: $STATE updated=${UPDATED} (${ELAPSED}s / ${TIMEOUT}s)"
+      sleep "$INTERVAL"
+      ELAPSED=$((ELAPSED + INTERVAL))
+    done
+  elif [[ "$GPU_STATE" != "ready" || "$GPU_ALLOC" -lt 1 ]]; then
     echo ""
     echo ">>> Fixing GPU driver (post-reboot recovery)..."
 
@@ -743,6 +861,80 @@ print("webui config patched")
         sh -c 'echo succeeded > /work/status; echo 0 > /work/exit_code' 2>/dev/null || true
       oc set env deploy/demo-bootstrapper -n rh-demo-bootstrapper \
         DEMO_RETRY=false DEMO_SETUP_ARGS- 2>/dev/null || true
+    fi
+  fi
+
+  # Fix 14: SPIRE agents keep a stale SVID on emptyDir across a reboot. After the
+  # server rotates an expired CA, attestation fails with "Trust Bundle and Server
+  # dont agree" until the agent rebootstraps. Skip this when the optional lab
+  # is not installed.
+  if [[ "${AGENT_IDENTITY_INSTALLED}" == "1" ]]; then
+    wait_spire_agents() {
+      local timeout="$1"
+      local elapsed=0
+      local ready desired
+      while true; do
+        ready=$(oc get ds spire-agent -n zero-trust-workload-identity-manager \
+          -o jsonpath='{.status.numberReady}' 2>/dev/null || echo 0)
+        desired=$(oc get ds spire-agent -n zero-trust-workload-identity-manager \
+          -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo 0)
+        ready=${ready:-0}
+        desired=${desired:-0}
+        if [[ "$desired" -ge 1 && "$ready" -ge "$desired" ]]; then
+          echo "    SPIRE agent ${ready}/${desired} Ready"
+          return 0
+        fi
+        if [[ "$elapsed" -ge "$timeout" ]]; then
+          echo "    SPIRE agent still ${ready}/${desired} after ${timeout}s"
+          return 1
+        fi
+        echo "    SPIRE agent ${ready}/${desired} (${elapsed}s / ${timeout}s)"
+        sleep 15
+        elapsed=$((elapsed + 15))
+      done
+    }
+
+    if [[ "${SPIRE_READY}" -lt "${SPIRE_DESIRED}" || "${SPIRE_DESIRED}" -lt 1 ]]; then
+      echo ""
+      echo ">>> Recovering SPIRE agents after server CA rotation..."
+      oc wait --for=condition=Ready pod/spire-server-0 \
+        -n zero-trust-workload-identity-manager --timeout=180s 2>/dev/null || true
+      if ! wait_spire_agents 180; then
+        echo "    Restarting SPIRE agent pods that are not Ready..."
+        oc get pods -n zero-trust-workload-identity-manager \
+          -l app.kubernetes.io/name=spire-agent --no-headers 2>/dev/null \
+          | awk '$2 != "1/1" {print $1}' \
+          | xargs -r oc delete pod -n zero-trust-workload-identity-manager --wait=false
+        wait_spire_agents 720 || true
+      fi
+    fi
+
+    OIDC_NOW=$(oc get deploy spire-spiffe-oidc-discovery-provider \
+      -n zero-trust-workload-identity-manager -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+    OIDC_NOW=${OIDC_NOW:-0}
+    SPIRE_NOW=$(oc get ds spire-agent -n zero-trust-workload-identity-manager \
+      -o jsonpath='{.status.numberReady}' 2>/dev/null || echo "0")
+    SPIRE_NOW=${SPIRE_NOW:-0}
+    if [[ "$OIDC_NOW" -lt 1 && "$SPIRE_NOW" -ge 1 ]]; then
+      echo ""
+      echo ">>> Restarting the SPIRE OIDC discovery provider (workload socket was missing)..."
+      oc rollout restart deploy/spire-spiffe-oidc-discovery-provider \
+        -n zero-trust-workload-identity-manager 2>/dev/null || true
+      oc rollout status deploy/spire-spiffe-oidc-discovery-provider \
+        -n zero-trust-workload-identity-manager --timeout=180s 2>/dev/null || true
+    fi
+
+    if oc get ns agent-governance &>/dev/null && [[ "$SPIRE_NOW" -ge 1 ]]; then
+      for dep in platform-agent untrusted-agent mcp-policy-proxy agent-console; do
+        DEP_NOW=$(oc get deploy "${dep}" -n agent-governance \
+          -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+        DEP_NOW=${DEP_NOW:-0}
+        if [[ "$DEP_NOW" -lt 1 ]]; then
+          echo ">>> Restarting agent-governance/${dep}..."
+          oc rollout restart "deploy/${dep}" -n agent-governance 2>/dev/null || true
+          oc rollout status "deploy/${dep}" -n agent-governance --timeout=180s 2>/dev/null || true
+        fi
+      done
     fi
   fi
 
